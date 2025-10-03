@@ -30,15 +30,6 @@ def separate_vocals(input_file_path, output_dir="output", model="UVR_MDXNET_Main
     model_dir = os.path.join(os.getcwd(), "models")
     os.makedirs(model_dir, exist_ok=True)
     
-    # Generate expected output filename
-    input_filename = os.path.splitext(os.path.basename(input_file_path))[0]
-    expected_vocals_file = os.path.join(output_dir, f"{input_filename}_(Vocals)_{model.replace('.onnx', '')}.wav")
-    
-    # Check if vocals file already exists
-    if os.path.exists(expected_vocals_file):
-        logger.info(f"Vocals file already exists: {expected_vocals_file}")
-        return expected_vocals_file
-    
     # Initialize the separator with CPU (since we're using the CPU version)
     separator = Separator(log_level=logging.INFO)
     
@@ -82,7 +73,7 @@ def separate_vocals(input_file_path, output_dir="output", model="UVR_MDXNET_Main
         
         return None
 
-def transcribe_with_timestamps(audio_file_path, model_size="large-v3-turbo", device="cpu", compute_type="int8"):
+def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="cpu", compute_type="int8"):
     """
     Transcribe an audio file with timestamped transcription using faster-whisper.
     
@@ -106,7 +97,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3-turbo", dev
         # Transcribe the audio with word-level timestamps
         segments, _ = model.transcribe(audio_file_path, beam_size=5, word_timestamps=True)
         
-        # Convert segments to a list to force transcription
+        # # Convert segments to a list to force transcription
         segment_list = list(segments)
         
         # Print the transcribed segments with timestamps
