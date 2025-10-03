@@ -60,10 +60,10 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
 def ensure_output_directory(output_dir: str) -> bool:
     """
     Create output directory if it doesn't exist.
-    
+
     Args:
         output_dir (str): Output directory path
-        
+
     Returns:
         bool: True if directory exists or was created successfully
     """
@@ -73,4 +73,22 @@ def ensure_output_directory(output_dir: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to create output directory {output_dir}: {e}")
         return False
+
+
+def load_prompt_template(prompt_file_path: str) -> str | None:
+    """
+    Load prompt template from file.
+
+    Args:
+        prompt_file_path (str): Path to the prompt template file
+
+    Returns:
+        str | None: Content of the prompt template file, or None if error occurred
+    """
+    try:
+        with open(prompt_file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"Error loading prompt template from {prompt_file_path}: {e}")
+        return None
 

@@ -11,6 +11,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import logging
 from logging_config import setup_logging, get_logger
+from utils import load_prompt_template
 
 logger = get_logger(__name__)
 
@@ -82,70 +83,31 @@ def generate_lrc_lyrics(client, lyrics_text, asr_transcript):
     """
     Generate LRC format lyrics by combining downloaded lyrics and ASR transcript
     using an LLM.
-    
+
     Args:
         client: OpenAI client instance
         lyrics_text (str): Downloaded lyrics text
         asr_transcript (str): ASR transcript with timestamps
-        
+
     Returns:
         str: LRC formatted lyrics
     """
     # Convert ASR transcript to LRC format for better alignment
     lrc_transcript = convert_transcript_to_lrc(asr_transcript)
-    
+
     model = os.getenv("OPENAI_MODEL", "Qwen/Qwen3-235B-A22B-Instruct-2507")
     # model = "deepseek-ai/DeepSeek-R1-0528"
-    
-    prompt = f"""
-    You are an expert LRC lyrics synchronization specialist. Your task is to create properly timed LRC format lyrics by combining a reference lyrics text with ASR transcript timestamps.
 
-    ## Input Data:
-    
-    1. Reference Lyrics (exact, unchangeable):
-    ```
-    {lyrics_text}
-    ```
-    
-    2. ASR Transcript with timestamps (mm:ss.xx format):
-    ```
-    {lrc_transcript}
-    ```
-    
-    ## Instructions:
-    
-    - Use ONLY the reference lyrics text as your source for lyrics content - do not modify any text
-    - Extract and adapt the timestamps from the ASR transcript to align with the reference lyrics
-    - Match ASR segments to the corresponding reference lyrics lines based on content similarity
-    - When ASR content spans multiple reference lines, assign the timestamp to the most relevant line
-    - When reference lyrics lines don't have direct ASR matches, interpolate appropriate timestamps based on context and timing patterns
-    - Maintain proper LRC format: [mm:ss.xx]Lyrics text without any additional commentary
-    - Preserve the original line breaks and structure of the **ASR content**
-    - Ensure timestamps are in [mm:ss.xx] format with hundredths precision
-    - If there are extra ASR segments not found in the reference lyrics, ignore them
-    - If reference lyrics have lines not found in ASR, estimate timestamps based on surrounding context
-    - Output only the LRC formatted lyrics with timestamps, nothing else
-    
-    ## Example:
-    
-    Input ASR:
-    [02:11.00]今日も答えのない世界の中で
-    [02:14.16]あ 願ってるんだよ
-    [02:16.12]不器用だけれど
-    
-    Input Reference Lyrics:
-    今日も
-    答えのない世界の中で
-    願ってるんだよ
-    不器用だけれど
-    
-    Expected Output:
-    [02:11.00]今日も答えのない世界の中で
-    [02:14.16]願ってるんだよ
-    [02:16.12]不器用だけれど
-    
-    ## Your Output:
-    """
+    # Load prompt template from file
+    prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "lrc_generation_prompt.txt")
+    prompt_template = load_prompt_template(prompt_template_path)
+
+    if not prompt_template:
+        logger.error("Failed to load prompt template")
+        return None
+
+    # Format the prompt with actual data
+    prompt = prompt_template.format(lyrics_text=lyrics_text, lrc_transcript=lrc_transcript)
     
     try:
         response = client.chat.completions.create(

@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from logging_config import setup_logging, get_logger
+from utils import load_prompt_template
 
 logger = get_logger(__name__)
 
@@ -62,63 +63,62 @@ def validate_lrc_content(content):
     return True
 
 
+def get_prompt_file_for_language(target_language: str) -> str:
+    """
+    Get the appropriate prompt file name for the target language.
+
+    Args:
+        target_language (str): Target language for translation
+
+    Returns:
+        str: Prompt file name for the language
+    """
+    # Map language names to prompt file names
+    language_prompt_map = {
+        "Traditional Chinese": "lrc_traditional_chinese_prompt.txt",
+        # Add more languages here as they are supported
+        # "English": "lrc_english_prompt.txt",
+        # "Japanese": "lrc_japanese_prompt.txt",
+    }
+
+    return language_prompt_map.get(target_language, "")
+
+
 def translate_lrc_content(client, lrc_content, target_language="Traditional Chinese"):
     """
     Translate LRC content using an LLM, returning a bilingual LRC file.
-    
+
     Args:
         client: OpenAI-compatible client instance
         lrc_content (str): Complete LRC file content to translate
         target_language (str): Target language for translation
-        
+
     Returns:
-        str: Translated bilingual LRC content
+        str: Translated bilingual LRC content, or None if not implemented
     """
+    # Only support Traditional Chinese translation for now
+    if target_language != "Traditional Chinese":
+        logger.warning(f"Translation to '{target_language}' is not implemented. Only 'Traditional Chinese' is supported.")
+        return None
+
     model = os.getenv("TRANSLATION_MODEL", os.getenv("OPENAI_MODEL", "qwen-plus"))
-    
-    # Chinese prompt using prompt engineering techniques
-    prompt = f"""
-你是一位专业的歌词翻译专家，精通中日/中英歌词翻译。你的任务是将包含时间戳的歌词（LRC格式）翻译成{target_language}，并生成一个双语LRC文件。
 
-角色设定：
-- 你是歌词翻译专家，精通{target_language}，了解歌词的韵律和意境
-- 你熟悉LRC格式（[mm:ss.xx]歌词内容 或 [mm:ss]歌词内容）
+    # Get the appropriate prompt file for the target language
+    prompt_file_name = get_prompt_file_for_language(target_language)
+    if not prompt_file_name:
+        logger.error(f"No prompt file configured for language: {target_language}")
+        return None
 
-输入格式：
-- 输入是一个LRC格式的歌词文件，包含时间戳和原歌词
-- 格式为：[mm:ss.xx]歌词内容 或 [mm:ss]歌词内容
-- 可能包含元数据行，如[ti:], [ar:], [al:], [by:], [offset:]等
+    # Load prompt template from file
+    prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", prompt_file_name)
+    prompt_template = load_prompt_template(prompt_template_path)
 
-输出要求：
-1. 保持原有LRC格式不变
-2. 为每行有歌词的时间戳行添加对应的{target_language}翻译
-3. 翻译应紧跟在原歌词行之后，使用相同的时间戳
-4. 保持所有元数据行（如[ti:], [ar:], [al:], [by:], [offset:]等）不变
-5. 确保翻译准确传达原歌词的含义和情感
-6. 如果某行没有歌词内容（只有时间戳），则不添加翻译
+    if not prompt_template:
+        logger.error(f"Failed to load prompt template: {prompt_file_name}")
+        return None
 
-示例输入：
-[ti:歌曲标题]
-[ar:歌手]
-[00:12.34]春が来た
-[00:15.67]花が咲いてる
-[00:18.90]風が優しく吹いてる
-
-示例输出：
-[ti:歌曲标题]
-[ar:歌手]
-[00:12.34]春が来た
-[00:12.34]春天来了
-[00:15.67]花が咲いてる
-[00:15.67]花儿正盛开
-[00:18.90]風が優しく吹いてる
-[00:18.90]微风轻柔地吹着
-
-现在请翻译以下LRC歌词内容，生成一个完整的双语LRC文件：
-{lrc_content}
-
-{target_language}双语LRC歌词：
-"""
+    # Format the prompt with actual data
+    prompt = prompt_template.format(target_language=target_language, lrc_content=lrc_content)
 
     
     try:
