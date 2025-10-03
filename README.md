@@ -19,11 +19,9 @@ git clone <repository-url>
 cd music-lyric
 ```
 
-2. Install dependencies:
+2. Install dependencies using uv:
 ```bash
-pip install -r requirements.txt
-# Or if using uv:
-uv pip install -r requirements.txt
+uv sync
 ```
 
 3. Set up environment variables by creating a `.env` file:
@@ -31,9 +29,6 @@ uv pip install -r requirements.txt
 OPENAI_API_KEY=your_api_key_here
 OPENAI_BASE_URL=https://api-inference.modelscope.cn/v1
 OPENAI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
-TRANSLATION_MODEL=qwen-plus
-TRANSLATION_BASE_URL=https://api-inference.modelscope.cn/v1
-TRANSLATION_API_KEY=your_translation_api_key_here
 ```
 
 ## Usage
@@ -42,7 +37,7 @@ TRANSLATION_API_KEY=your_translation_api_key_here
 
 Run the main pipeline with default settings:
 ```bash
-python main.py
+uv run main.py
 ```
 
 ### Individual Components
@@ -51,19 +46,19 @@ The pipeline can be run in parts using the main script:
 
 ```bash
 # Extract metadata from an audio file
-python main.py metadata --file input/your_song.flac
+uv run main.py metadata --file input/your_song.flac
 
 # Search for lyrics online
-python main.py search --file input/your_song.flac
+uv run main.py search --file input/your_song.flac
 
 # Separate vocals and transcribe
-python main.py separate --file input/your_song.flac
+uv run main.py separate --file input/your_song.flac
 
 # Generate LRC lyrics from transcript
-python main.py generate --file input/your_song.flac
+uv run main.py generate --file input/your_song.flac
 
 # Translate LRC lyrics to Traditional Chinese
-python main.py translate --file input/your_song.flac
+uv run main.py translate --file input/your_song.flac
 ```
 
 ### Individual Scripts
@@ -72,22 +67,22 @@ Each component can also be run directly:
 
 ```bash
 # Extract metadata
-python extract_metadata.py input/your_song.flac
+uv run extract_metadata.py input/your_song.flac
 
 # Debug metadata
-python debug_metadata.py input/your_song.flac
+uv run debug_metadata.py input/your_song.flac
 
 # Search for lyrics
-python search_lyrics.py input/your_song.flac
+uv run search_lyrics.py input/your_song.flac
 
 # Separate vocals
-python separate_vocals.py input/your_song.flac
+uv run separate_vocals.py input/your_song.flac
 
 # Generate LRC lyrics
-python generate_lrc.py
+uv run generate_lrc.py
 
 # Translate LRC lyrics
-python translate_lrc.py input/your_song.lrc
+uv run translate_lrc.py input/your_song.lrc
 ```
 
 ## Configuration
@@ -96,7 +91,7 @@ python translate_lrc.py input/your_song.lrc
 
 All scripts support configurable logging levels:
 ```bash
-python extract_metadata.py input/your_song.flac --log-level DEBUG
+uv run extract_metadata.py input/your_song.flac --log-level DEBUG
 ```
 
 ### Output Directories
@@ -126,13 +121,14 @@ music-lyric/
 ## Requirements
 
 - Python 3.8+
+- [uv](https://github.com/astral-sh/uv) for package management
 - Required Python packages (see `pyproject.toml`)
 - Audio files in common formats (FLAC, MP3, etc.)
 - API key for OpenAI-compatible service for LRC generation and translation
 
 ## Troubleshooting
 
-1. **Missing Dependencies**: Ensure all dependencies are installed via pip/uv
+1. **Missing Dependencies**: Ensure all dependencies are installed via uv with `uv sync`
 2. **API Key Issues**: Verify your API keys are correctly set in the `.env` file
 3. **File Not Found**: Ensure input files exist in the correct directory
 4. **Model Issues**: Some models may need to be downloaded automatically on first use
