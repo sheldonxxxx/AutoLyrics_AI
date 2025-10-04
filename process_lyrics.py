@@ -254,7 +254,7 @@ def search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: Proce
         # Define result file path for song identification caching
         song_id_result_path = paths['transcript_txt'].with_name(f"{results.filename.replace('.', '_')}_song_identification.json")
 
-        identified_song = identify_song_from_asr(transcript_content, str(song_id_result_path))
+        identified_song = identify_song_from_asr(transcript_content, str(song_id_result_path), force_recompute=not resume)
 
         if identified_song:
             song_title, artist_name, native_language = identified_song

@@ -67,7 +67,7 @@ class SearXNGSearchTool(BaseTool):
             # Format results for LLM
             if 'results' in data:
                 results = []
-                for result in data['results'][:5]:  # Limit to top 5 results
+                for result in data['results'][:10]:  # Limit to top 10 results
                     results.append({
                         'title': result.get('title', ''),
                         'url': result.get('url', ''),
@@ -243,19 +243,20 @@ class SongIdentifier:
             return None
 
 
-def identify_song_from_asr(transcript: str, result_file_path: Optional[str] = None) -> Optional[Tuple[str, str, str]]:
+def identify_song_from_asr(transcript: str, result_file_path: Optional[str] = None, force_recompute: bool = False) -> Optional[Tuple[str, str, str]]:
     """
     Convenience function to identify song from ASR transcript with optional caching.
 
     Args:
         transcript (str): ASR transcript of the song vocals
         result_file_path (Optional[str]): Path to save/load identification results
+        force_recompute (bool): If True, skip cache and always perform new identification
 
     Returns:
         Optional[Tuple[str, str, str]]: (song_title, artist_name, native_language) if identified, None otherwise
     """
-    # Try to load existing result if file path provided
-    if result_file_path and Path(result_file_path).exists():
+    # Try to load existing result if file path provided and not forcing recompute
+    if not force_recompute and result_file_path and Path(result_file_path).exists():
         try:
             with open(result_file_path, 'r', encoding='utf-8') as f:
                 cached_result = json.load(f)
