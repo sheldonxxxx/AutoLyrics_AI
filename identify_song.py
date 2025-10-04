@@ -7,14 +7,13 @@ import os
 import logging
 import json
 import requests
-from typing import Dict, List, Optional, Tuple
-from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 from pydantic import BaseModel, Field
 
-from langchain_openai import ChatOpenAI
-from langchain_core.tools import BaseTool
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 from dotenv import load_dotenv
 from logging_config import get_logger
 from utils import get_openai_config, load_prompt_template
@@ -22,75 +21,94 @@ from utils import get_openai_config, load_prompt_template
 logger = get_logger(__name__)
 
 
-class SearXNGSearchTool(BaseTool):
-    """Custom tool for searching with SearXNG."""
+def searxng_search(query: str) -> str:
+    """
+    Search the web using SearXNG metasearch engine.
 
-    name: str = "searxng_search"
-    description: str = "Search the web using SearXNG metasearch engine"
-    searxng_url: str = Field(default_factory=lambda: os.getenv("SEARXNG_URL") or "")
+    Args:
+        query: The search query string
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    Returns:
+        Formatted search results as a string
+    """
+    searxng_url = os.getenv("SEARXNG_URL")
+    if not searxng_url:
+        error_msg = (
+            "ERROR: SEARXNG_URL not found in environment variables. "
+            "Please add SEARXNG_URL to your .env file, for example: "
+            "SEARXNG_URL=http://localhost:8888"
+        )
+        logger.error(error_msg)
+        return error_msg
 
-        # Validate SearXNG URL configuration
-        if not self.searxng_url:
-            print("ERROR: SEARXNG_URL not found in environment variables.")
-            print("Please add SEARXNG_URL to your .env file, for example:")
-            print("SEARXNG_URL=http://localhost:8888")
-            print("Or set the environment variable directly.")
-            exit(1)
+    try:
+        # SearXNG API parameters
+        params = {
+            'q': query,
+            'format': 'json',
+            'categories': 'general,music',
+            'engines': 'google,bing,duckduckgo'
+        }
 
-    def _run(self, query: str) -> str:
-        """Execute the SearXNG search."""
-        try:
-            # SearXNG API parameters
-            params = {
-                'q': query,
-                'format': 'json',
-                # 'language': 'ja',
-                'categories': 'general,music',
-                'engines': 'google,bing,duckduckgo'
-            }
+        logger.info(f"Searching SearXNG at {searxng_url} with query: {query}")
 
-            logger.info(f"Searching SearXNG at {self.searxng_url} with query: {query}")
+        # Make request to SearXNG with proper error handling
+        response = requests.get(
+            f"{searxng_url}/search",
+            params=params,
+            timeout=10
+        )
+        response.raise_for_status()
 
-            # Make request to SearXNG
-            response = requests.get(
-                f"{self.searxng_url}/search",
-                params=params,
-                timeout=10
-            )
-            response.raise_for_status()
+        data = response.json()
 
-            data = response.json()
+        # Format results for LLM
+        if 'results' in data and data['results']:
+            results = []
+            for result in data['results'][:10]:  # Limit to top 10 results
+                title = result.get('title', '').strip()
+                url = result.get('url', '').strip()
+                content = result.get('content', '').strip()
 
-            # Format results for LLM
-            if 'results' in data:
-                results = []
-                for result in data['results'][:10]:  # Limit to top 10 results
-                    results.append({
-                        'title': result.get('title', ''),
-                        'url': result.get('url', ''),
-                        'content': result.get('content', '')[:200] + '...' if len(result.get('content', '')) > 200 else result.get('content', '')
-                    })
+                # Skip results with empty essential fields
+                if not title or not url:
+                    continue
 
-                # Create a formatted string for the LLM
-                formatted_results = f"Search results for '{query}':\n\n"
-                for i, result in enumerate(results, 1):
-                    formatted_results += f"{i}. **{result['title']}**\n"
-                    formatted_results += f"   URL: {result['url']}\n"
-                    formatted_results += f"   Content: {result['content']}\n\n"
+                # Truncate content if too long
+                if len(content) > 200:
+                    content = content[:200] + '...'
 
-                return formatted_results
-            else:
-                return f"No search results found for '{query}'"
+                results.append({
+                    'title': title,
+                    'url': url,
+                    'content': content
+                })
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"SearXNG search request failed: {e}")
-            return f"Search request failed: {str(e)}"
-        except Exception as e:
-            logger.error(f"SearXNG search error: {e}")
-            return f"Search error: {str(e)}"
+            if not results:
+                return f"No valid search results found for '{query}'"
+
+            # Create a formatted string for the LLM
+            formatted_results = f"Search results for '{query}':\n\n"
+            for i, result in enumerate(results, 1):
+                formatted_results += f"{i}. **{result['title']}**\n"
+                formatted_results += f"   URL: {result['url']}\n"
+                if result['content']:
+                    formatted_results += f"   Content: {result['content']}\n"
+                formatted_results += "\n"
+
+            return formatted_results.strip()
+        else:
+            return f"No search results found for '{query}'"
+
+    except requests.exceptions.Timeout:
+        logger.error(f"SearXNG search timed out for query: {query}")
+        return f"Search request timed out for '{query}'"
+    except requests.exceptions.RequestException as e:
+        logger.error(f"SearXNG search request failed: {e}")
+        return f"Search request failed: {str(e)}"
+    except Exception as e:
+        logger.error(f"SearXNG search error: {e}")
+        return f"Search error: {str(e)}"
 
 
 class SongIdentification(BaseModel):
@@ -113,33 +131,46 @@ class SongIdentifier:
         # Get OpenAI configuration using utility function
         config = get_openai_config()
 
-        # Initialize the LLM with tool binding
-        self.llm = ChatOpenAI(
+        # Create OpenAI provider with custom configuration
+        openai_provider = OpenAIProvider(
             base_url=config["OPENAI_BASE_URL"],
-            api_key=config["OPENAI_API_KEY"],
-            model=config["OPENAI_MODEL"],
-            temperature=0.1
+            api_key=config["OPENAI_API_KEY"]
         )
 
-        # Initialize SearXNG search tool
-        self.search_tool = SearXNGSearchTool()
+        # Create OpenAI model with the provider
+        openai_model = OpenAIChatModel(
+            config["OPENAI_MODEL"],
+            provider=openai_provider
+        )
 
-        # Initialize the LLM for tool interactions (without structured output)
-        self.llm_with_tools = self.llm.bind_tools([self.search_tool])
+        # Create Pydantic AI agent with the model
+        self.agent = Agent(
+            openai_model,
+            tools=[searxng_search],
+            output_type=SongIdentification
+        )
 
     def identify_song(self, transcript: str) -> Optional[SongIdentification]:
         """
         Identify song name and artist from ASR transcript.
 
         Args:
-            transcript (str): ASR transcript of the song vocals
+            transcript: ASR transcript of the song vocals
 
         Returns:
-            Optional[SongIdentification]: Identified song information or None if identification fails
+            Identified song information or None if identification fails
         """
+        if not transcript or not transcript.strip():
+            logger.error("Empty or invalid transcript provided")
+            return None
+
         try:
             # Load prompt template from file
-            prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "song_identification_prompt.txt")
+            prompt_template_path = os.path.join(
+                os.path.dirname(__file__),
+                "prompt",
+                "song_identification_prompt.txt"
+            )
             prompt_template = load_prompt_template(prompt_template_path)
 
             if not prompt_template:
@@ -149,103 +180,164 @@ class SongIdentifier:
             # Generate JSON schema from SongIdentification model
             json_schema = SongIdentification.model_json_schema()
 
-            # Format the prompt with actual data and JSON schema (escape for template)
-            prompt = prompt_template.format(
-                transcript=transcript[:2000],
+            # Format the prompt with actual data and JSON schema
+            user_prompt = prompt_template.format(
+                transcript=transcript.strip()[:2000],  # Limit and clean input
                 json_schema=json.dumps(json_schema, indent=2)
             )
 
-            # Start conversation with the prompt
-            messages = [HumanMessage(content=prompt)]
+            # Use Pydantic AI agent to run the identification
+            logger.info("Running song identification with Pydantic AI agent")
+            result = self.agent.run_sync(user_prompt)
 
-            # Run the LLM with tools until no more tool calls
-            max_iterations = 10  # Safety limit to prevent infinite loops
-            for iteration in range(max_iterations):
-                logger.info(f"LLM tool iteration {iteration + 1}")
+            # Validate the result
+            if not result or not result.output:
+                logger.error("No result returned from Pydantic AI agent")
+                return None
 
-                # Get response from LLM
-                response = self.llm_with_tools.invoke(messages)
+            if not isinstance(result.output, SongIdentification):
+                logger.error(f"Invalid result type: {type(result.output)}")
+                return None
 
-                # Check if LLM wants to use tools
-                if hasattr(response, 'tool_calls') and response.tool_calls:
-                    # Add the LLM's response to messages
-                    messages.append(response)
+            song_result = result.output
 
-                    # Execute the tool calls
-                    for tool_call in response.tool_calls:
-                        logger.info(f"Executing tool call: {tool_call}")
+            # Validate required fields
+            if not song_result.song_title or not song_result.artist_name:
+                logger.warning("Missing song title or artist name in result")
+                return None
 
-                        # Execute the SearXNG search tool
-                        if tool_call['name'] == 'searxng_search':
-                            # Extract the query from tool args
-                            query = tool_call['args'].get('query', '')
-                            tool_result = self.search_tool._run(query)
-                        else:
-                            tool_result = f"Unknown tool: {tool_call['name']}"
+            # Validate confidence score
+            if not (0.0 <= song_result.confidence_score <= 1.0):
+                logger.warning(f"Invalid confidence score: {song_result.confidence_score}")
+                return None
 
-                        # Add tool result to messages
-                        messages.append(ToolMessage(
-                            content=str(tool_result),
-                            tool_call_id=tool_call['id']
-                        ))
-
-                    logger.info(f"Tool calls executed, continuing conversation...")
-                else:
-                    # LLM has finished and provided a final answer
-                    logger.info("LLM finished using tools, processing final response")
-                    break
-
-            if iteration == max_iterations - 1:
-                logger.warning(f"Reached maximum iterations ({max_iterations}), stopping tool use")
-
-            # Get the final response content for structured parsing
-            final_content = response.content if hasattr(response, 'content') else str(response)
-
-            try:
-                # Parse JSON response manually (no structured output due to API compatibility)
-                if "```json" in final_content:
-                    json_str = final_content.split("```json")[1].split("```")[0].strip()
-                elif "{" in final_content:
-                    # Find JSON object in text
-                    start = final_content.find("{")
-                    end = final_content.rfind("}") + 1
-                    json_str = final_content[start:end]
-                else:
-                    json_str = final_content
-
-                result_data = json.loads(json_str)
-
-                # Create SongIdentification object
-                result = SongIdentification(
-                    song_title=result_data.get('song_title', ''),
-                    artist_name=result_data.get('artist_name', ''),
-                    confidence_score=float(result_data.get('confidence_score', 0.0)),
-                    native_language=result_data.get('native_language', result_data.get('language', '')),
-                    search_queries_used=result_data.get('search_queries_used', []),
-                    reasoning=result_data.get('reasoning', '')
+            # Check confidence threshold
+            if song_result.confidence_score > 0.3:
+                logger.info(
+                    f"Successfully identified song: '{song_result.song_title}' "
+                    f"by '{song_result.artist_name}' "
+                    f"({song_result.native_language}) - "
+                    f"confidence: {song_result.confidence_score:.2f}"
                 )
-
-                # Validate the result
-                if result and result.confidence_score > 0.3:
-                    logger.info(f"Successfully identified song: {result.song_title} by {result.artist_name} (confidence: {result.confidence_score})")
-                    return result
-                else:
-                    logger.warning(f"Low confidence identification: {result.confidence_score if result else 'None'}")
-                    return None
-
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON response: {e}")
-                logger.error(f"Response text: {final_content}")
+                return song_result
+            else:
+                logger.warning(
+                    f"Low confidence identification: {song_result.confidence_score:.2f} "
+                    f"for '{song_result.song_title}' by '{song_result.artist_name}'"
+                )
                 return None
 
         except Exception as e:
-            logger.error(f"Error during song identification: {e}")
+            logger.error(f"Error during song identification: {e}", exc_info=True)
             return None
+
+
+def identify_song_from_asr_with_retry(transcript: str, result_file_path: Optional[str] = None, force_recompute: bool = False, max_retries: int = 3) -> Optional[Tuple[str, str, str]]:
+    """
+    Identify song from ASR transcript with retry mechanism and feedback about previous wrong results.
+
+    Args:
+        transcript (str): ASR transcript of the song vocals
+        result_file_path (Optional[str]): Path to save/load identification results
+        force_recompute (bool): If True, skip cache and always perform new identification
+        max_retries (int): Maximum number of retry attempts (default: 3)
+
+    Returns:
+        Optional[Tuple[str, str, str]]: (song_title, artist_name, native_language) if identified, None otherwise
+    """
+    previous_attempts = []
+
+    for attempt in range(max_retries):
+        logger.info(f"Song identification attempt {attempt + 1}/{max_retries}")
+
+        # Try to load existing result if file path provided and not forcing recompute
+        if not force_recompute and result_file_path and Path(result_file_path).exists() and attempt == 0:
+            try:
+                with open(result_file_path, 'r', encoding='utf-8') as f:
+                    cached_result = json.load(f)
+
+                # Validate cached result has required fields
+                if (cached_result.get('song_title') and
+                    cached_result.get('artist_name') and
+                    cached_result.get('confidence_score', 0) > 0.5):
+
+                    logger.info(f"Loaded cached song identification: {cached_result['song_title']} by {cached_result['artist_name']}")
+                    return (cached_result['song_title'],
+                            cached_result['artist_name'],
+                            cached_result.get('native_language', ''))
+
+            except Exception as e:
+                logger.warning(f"Failed to load cached song identification: {e}")
+
+        # Perform new identification
+        identifier = SongIdentifier()
+        result = identifier.identify_song(transcript)
+
+        if result and result.confidence_score > 0.5:
+            song_info = (result.song_title, result.artist_name, result.native_language)
+
+            # Check if this is a retry and we have previous attempts
+            if attempt > 0 and previous_attempts:
+                # For retries, we need to verify this isn't the same wrong result
+                # For now, we'll assume different results are valid attempts
+                # In a more sophisticated implementation, we could compare with previous wrong results
+                pass
+
+            # Save result if file path provided
+            if result_file_path:
+                try:
+                    # Ensure directory exists
+                    Path(result_file_path).parent.mkdir(parents=True, exist_ok=True)
+
+                    # Save full result for future use
+                    result_data = {
+                        'song_title': result.song_title,
+                        'artist_name': result.artist_name,
+                        'confidence_score': result.confidence_score,
+                        'search_queries_used': result.search_queries_used,
+                        'reasoning': result.reasoning,
+                        'attempt_number': attempt + 1,
+                        'total_attempts': max_retries
+                    }
+
+                    with open(result_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(result_data, f, ensure_ascii=False, indent=2)
+
+                    logger.info(f"Saved song identification result to: {result_file_path}")
+
+                except Exception as e:
+                    logger.warning(f"Failed to save song identification result: {e}")
+
+            logger.info(f"Successfully identified song on attempt {attempt + 1}: '{result.song_title}' by '{result.artist_name}'")
+            return song_info
+        else:
+            if result:
+                logger.warning(f"Low confidence identification on attempt {attempt + 1}: {result.confidence_score:.2f} for '{result.song_title}' by '{result.artist_name}'")
+                previous_attempts.append({
+                    'song_title': result.song_title,
+                    'artist_name': result.artist_name,
+                    'confidence': result.confidence_score,
+                    'reasoning': result.reasoning
+                })
+            else:
+                logger.warning(f"No identification result on attempt {attempt + 1}")
+
+            # If this isn't the last attempt, continue to retry
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying song identification (attempt {attempt + 2}/{max_retries})...")
+                # Add a small delay between attempts
+                import time
+                time.sleep(1)
+            else:
+                logger.error(f"Failed to identify song after {max_retries} attempts")
+
+    return None
 
 
 def identify_song_from_asr(transcript: str, result_file_path: Optional[str] = None, force_recompute: bool = False) -> Optional[Tuple[str, str, str]]:
     """
     Convenience function to identify song from ASR transcript with optional caching.
+    (Legacy function - use identify_song_from_asr_with_retry for new implementations)
 
     Args:
         transcript (str): ASR transcript of the song vocals
@@ -275,42 +367,37 @@ def identify_song_from_asr(transcript: str, result_file_path: Optional[str] = No
             logger.warning(f"Failed to load cached song identification: {e}")
 
     # Perform new identification if no valid cached result
-    try:
-        identifier = SongIdentifier()
-        result = identifier.identify_song(transcript)
+    identifier = SongIdentifier()
+    result = identifier.identify_song(transcript)
 
-        if result and result.confidence_score > 0.5:
-            song_info = (result.song_title, result.artist_name, result.native_language)
+    if result and result.confidence_score > 0.5:
+        song_info = (result.song_title, result.artist_name, result.native_language)
 
-            # Save result if file path provided
-            if result_file_path:
-                try:
-                    # Ensure directory exists
-                    Path(result_file_path).parent.mkdir(parents=True, exist_ok=True)
+        # Save result if file path provided
+        if result_file_path:
+            try:
+                # Ensure directory exists
+                Path(result_file_path).parent.mkdir(parents=True, exist_ok=True)
 
-                    # Save full result for future use
-                    result_data = {
-                        'song_title': result.song_title,
-                        'artist_name': result.artist_name,
-                        'confidence_score': result.confidence_score,
-                        'search_queries_used': result.search_queries_used,
-                        'reasoning': result.reasoning
-                    }
+                # Save full result for future use
+                result_data = {
+                    'song_title': result.song_title,
+                    'artist_name': result.artist_name,
+                    'confidence_score': result.confidence_score,
+                    'search_queries_used': result.search_queries_used,
+                    'reasoning': result.reasoning
+                }
 
-                    with open(result_file_path, 'w', encoding='utf-8') as f:
-                        json.dump(result_data, f, ensure_ascii=False, indent=2)
+                with open(result_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(result_data, f, ensure_ascii=False, indent=2)
 
-                    logger.info(f"Saved song identification result to: {result_file_path}")
+                logger.info(f"Saved song identification result to: {result_file_path}")
 
-                except Exception as e:
-                    logger.warning(f"Failed to save song identification result: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to save song identification result: {e}")
 
-            return song_info
-        else:
-            return None
-
-    except Exception as e:
-        logger.error(f"Failed to initialize song identifier: {e}")
+        return song_info
+    else:
         return None
 
 

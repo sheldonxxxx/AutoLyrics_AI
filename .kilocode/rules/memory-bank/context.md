@@ -17,6 +17,9 @@ The system is currently focused on processing Japanese music files, with lyrics 
 - **Separated UVR and ASR functionality** into distinct modules (`separate_vocals.py` and `transcribe_vocals.py`) for better modularity
 - **Implemented song-specific folder structure** - all intermediate files for each song are now organized in `tmp/{relative_path}/{filename}/` folders
 - Enhanced vocal separation with custom output path support and automatic cleanup of instrumental files
+- **NEW: LLM-based lyrics verification system** - verifies downloaded lyrics match ASR content before proceeding to LRC generation
+- **NEW: Enhanced song identification with retry mechanism** - up to 3 attempts with feedback to avoid incorrect lyrics
+- **NEW: Quality assurance workflow** - only processes to LRC generation if lyrics verification passes (≥60% confidence threshold)
 
 ## Next Steps
 

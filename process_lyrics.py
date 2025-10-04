@@ -30,7 +30,8 @@ from separate_vocals import separate_vocals
 from transcribe_vocals import transcribe_with_timestamps
 from generate_lrc import read_lyrics_file, read_transcript_file, generate_lrc_lyrics, correct_grammar_in_transcript
 from translate_lrc import main as translate_main
-from identify_song import identify_song_from_asr
+from identify_song import identify_song_from_asr, identify_song_from_asr_with_retry
+from verify_lyrics import verify_lyrics_match
 from openai import OpenAI
 from dotenv import load_dotenv
 from utils import (
@@ -242,19 +243,19 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
 
 
 def search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: ProcessingResults, transcript_content: Optional[str] = None) -> Optional[str]:
-    """Step 4: Search for lyrics online."""
+    """Step 4: Search for lyrics online with verification against ASR content."""
 
     # Check if we have metadata
     has_metadata = metadata['title'] and metadata['artist']
 
-    # If no metadata but we have transcript, try to identify song from ASR
+    # If no metadata but we have transcript, try to identify song from ASR with retry
     if not has_metadata and transcript_content:
         logger.info("No metadata available, attempting to identify song from ASR transcript...")
 
         # Define result file path for song identification caching
         song_id_result_path = paths['transcript_txt'].with_name(f"{results.filename.replace('.', '_')}_song_identification.json")
 
-        identified_song = identify_song_from_asr(transcript_content, str(song_id_result_path), force_recompute=not resume)
+        identified_song = identify_song_from_asr_with_retry(transcript_content, str(song_id_result_path), force_recompute=not resume, max_retries=3)
 
         if identified_song:
             song_title, artist_name, native_language = identified_song
@@ -268,7 +269,7 @@ def search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: Proce
             has_metadata = True
             results.lyrics_source = f'uta-net.com (identified from ASR: {native_language})'
         else:
-            logger.warning("Could not identify song from ASR transcript")
+            logger.warning("Could not identify song from ASR transcript after 3 attempts")
             results.lyrics_search_success = False
             return None
 
@@ -314,7 +315,22 @@ def search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: Proce
                 f.write(lyrics_content)
                 f.write(f"\n\nSource: uta-net.com")
             logger.info(f"Lyrics found and saved: {results.lyrics_length} chars, {results.lyrics_line_count} lines")
-            return lyrics_content
+
+            # Step 4.5: Verify lyrics match ASR content
+            logger.info("Step 4.5: Verifying lyrics match ASR content...")
+            is_match, confidence, reasoning = verify_lyrics_match(lyrics_content, transcript_content)
+
+            if is_match and confidence >= 0.6:  # Require minimum 60% confidence for match
+                logger.info(f"Lyrics verification passed: confidence={confidence:.2f}")
+                results.lyrics_search_success = True
+                return lyrics_content
+            else:
+                logger.warning(f"Lyrics verification failed: confidence={confidence:.2f}, match={is_match}")
+                logger.warning(f"Reasoning: {reasoning}")
+                results.lyrics_search_success = False
+                results.error_message = f"Lyrics verification failed: {reasoning}"
+                return None
+
         else:
             results.lyrics_search_success = False
             logger.warning(f"Could not find lyrics for '{metadata['title']}' by {metadata['artist']}")

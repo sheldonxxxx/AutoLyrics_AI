@@ -13,12 +13,14 @@ This project provides a comprehensive pipeline for processing music files to ext
 
 ## Key Features
 - **Metadata Extraction**: Extract song title, artist, and other metadata from audio files
+- **Song Identification**: Identify songs from ASR transcripts using LLM and web search (with retry)
 - **Lyrics Search**: Search for lyrics on uta-net.com using song title and artist
+- **Lyrics Verification**: NEW: Verify downloaded lyrics match ASR content using LLM
 - **Vocal Separation**: Separate vocals from music using audio-separator
 - **Transcription**: Generate timestamped transcription of vocals using Whisper
-- **LRC Generation**: Combine lyrics and transcription to create synchronized LRC files
+- **LRC Generation**: Combine verified lyrics and transcription to create synchronized LRC files
 - **Translation**: Translate LRC lyrics to Traditional Chinese (or other languages)
-- **Batch Processing**: Process all FLAC files in a directory recursively
+- **Batch Processing**: Process all FLAC files in a directory recursively with quality assurance
 
 ## Technologies Used
 - Python 3.13+

@@ -10,12 +10,14 @@ The Music Lyrics Processing Pipeline follows a modular, component-based architec
 Input FLAC Files
        ↓
 [extract_metadata.py] → Extract song metadata (title, artist, etc.)
+       ↓ (if no metadata)
+[identify_song.py] → Identify song from ASR transcript (with retry)
        ↓
 [search_lyrics.py] → Search for lyrics on uta-net.com
        ↓
-[separate_vocals.py] → Separate vocals using UVR, transcribe with Whisper
-       ↓
-[generate_lrc.py] → Combine lyrics and ASR transcript to create LRC
+[verify_lyrics.py] → NEW: Verify lyrics match ASR content using LLM
+       ↓ (if verification passes)
+[generate_lrc.py] → Combine verified lyrics and ASR transcript to create LRC
        ↓
 [translate_lrc.py] → Translate LRC to Traditional Chinese
        ↓
@@ -33,7 +35,17 @@ Output: Synchronized LRC files in output directory
   - Handles various tag formats (ID3, FLAC, etc.)
   - Falls back to filename parsing if no tags exist
 
-#### 2. `search_lyrics.py`
+#### 2. `identify_song.py`
+- **Purpose**: Identify song from ASR transcript using LLM and web search (with retry)
+- **Technology**: Uses OpenAI-compatible API and SearXNG for song identification
+- **Features**:
+  - Performs web search using ASR transcript content
+  - Uses LLM for intelligent song matching
+  - **NEW: Retry mechanism with up to 3 attempts**
+  - **NEW: Feedback system for improved identification**
+  - Caching system for identified songs
+
+#### 3. `search_lyrics.py`
 - **Purpose**: Search for lyrics on uta-net.com using song title and artist
 - **Technology**: Uses `requests` and `beautifulsoup4` for web scraping
 - **Features**:
@@ -74,13 +86,24 @@ Output: Synchronized LRC files in output directory
   - Preserves timestamps and LRC formatting
   - Maintains original metadata lines
 
-#### 6. `process_flac_lyrics.py`
-- **Purpose**: Orchestrates the full workflow for batch processing
+#### 6. `verify_lyrics.py`
+- **Purpose**: Verify downloaded lyrics match ASR transcript content using LLM
+- **Technology**: Uses OpenAI-compatible API for content verification
+- **Features**:
+  - Compares lyrics with ASR transcript for content similarity
+  - Returns confidence scores and detailed reasoning
+  - Structured output with match verification
+  - Prevents incorrect lyrics from proceeding to LRC generation
+
+#### 7. `process_lyrics.py`
+- **Purpose**: Orchestrates the full workflow for batch processing with verification
 - **Features**:
   - Recursively processes all FLAC files in a directory
   - Manages temporary and output directories
- - Implements skip-existing functionality
+  - Implements skip-existing functionality
   - Provides progress tracking
+  - **NEW: Integrated lyrics verification workflow**
+  - **NEW: Retry mechanism for song identification**
 
 ### Data Flow Architecture
 

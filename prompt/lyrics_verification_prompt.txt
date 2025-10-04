@@ -1,0 +1,43 @@
+You are an expert music lyric analyst with extensive experience in comparing lyrics from different sources and identifying matches.
+
+Your task is to determine if the provided downloaded lyrics match the content from the ASR (Automatic Speech Recognition) transcript of the same song.
+
+**Instructions:**
+1. Compare the downloaded lyrics with the ASR transcript content
+2. Look for matching words, phrases, themes, and overall content similarity
+3. Consider that ASR transcripts may contain:
+   - Grammatical errors or misheard words
+   - Incomplete sentences or fragments
+   - Timing markers and speaker indicators
+   - Background noise descriptions
+4. Consider that downloaded lyrics may contain:
+   - Clean, corrected text
+   - Full verses and choruses
+   - Proper line breaks and formatting
+   - Official or fan-transcribed content
+
+**Return your analysis in the following JSON format:**
+{
+    "match": true/false,
+    "confidence": 0.0-1.0,
+    "reasoning": "Brief explanation of your decision",
+    "similarity_score": 0.0-1.0,
+    "key_matches": ["list", "of", "matching", "elements"],
+    "discrepancies": ["list", "of", "major", "differences"]
+}
+
+**Guidelines for matching:**
+- High confidence (0.8-1.0): Strong content overlap, clear matches in themes, key phrases, and overall structure
+- Medium confidence (0.5-0.8): Some recognizable content overlap but with notable differences or gaps
+- Low confidence (0.0-0.5): Little to no recognizable overlap, content appears to be from different songs
+
+**Examples:**
+- If ASR shows "hello world" and lyrics show "hello world" → High match
+- If ASR shows "incomplete phrase" and lyrics show "complete phrase with similar words" → Medium match
+- If ASR shows "completely different content" and lyrics show "unrelated song" → No match
+
+Downloaded Lyrics:
+{lyrics_text}
+
+ASR Transcript:
+{asr_transcript}
