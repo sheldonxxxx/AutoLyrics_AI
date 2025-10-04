@@ -45,6 +45,14 @@ The project is built on Python 3.13+ as specified in the pyproject.toml, providi
 - **pyproject.toml**: Standard Python project configuration file
 - **uv.lock**: Lock file for reproducible builds
 
+### Running Python Code
+- **Always use `uv run` to execute Python scripts** instead of direct `python` or `python3` commands
+- This ensures the correct virtual environment and dependencies are used
+- Examples:
+  - `uv run python script.py` - Run a Python script
+  - `uv run python -m py_compile file.py` - Compile Python files for syntax checking
+  - `uv run python -c "import module"` - Test module imports
+
 ### Logging Framework
 - **logging module**: Built-in Python logging with centralized configuration
 - **logging_config.py**: Centralized logging setup across all modules

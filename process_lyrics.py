@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Script to process all FLAC files in a folder (recursive) and create LRC files by:
+Script to process all audio files (FLAC and MP3) in a folder (recursive) and create LRC files by:
 1. Using UVR to separate vocals
 2. Using ASR to transcribe vocals with timestamps
 3. Searching for lyrics online
-4. Generating LRC files with synchronized timestamps
-5. Adding translation to Traditional Chinese
+4. Applying grammatical correction to ASR transcript (if no lyrics found)
+5. Generating LRC files with synchronized timestamps
+6. Adding translation to Traditional Chinese
 
 This script orchestrates the full workflow in a single command.
 """
@@ -25,12 +26,18 @@ from typing import Dict, List, Optional, Tuple
 from logging_config import setup_logging, get_logger
 from extract_metadata import extract_metadata
 from search_lyrics import search_uta_net
-from separate_vocals import separate_vocals, transcribe_with_timestamps
-from generate_lrc import read_lyrics_file, read_transcript_file, generate_lrc_lyrics
+from separate_vocals import separate_vocals
+from transcribe_vocals import transcribe_with_timestamps
+from generate_lrc import read_lyrics_file, read_transcript_file, generate_lrc_lyrics, correct_grammar_in_transcript
 from translate_lrc import main as translate_main
+from identify_song import identify_song_from_asr
 from openai import OpenAI
 from dotenv import load_dotenv
-from utils import find_flac_files, ensure_output_directory, get_output_paths
+from utils import (
+    find_audio_files, ensure_output_directory, get_output_paths,
+    parse_transcript_segments, extract_lyrics_content, convert_transcript_to_lrc,
+    should_skip_file, write_csv_results, get_openai_config
+)
 
 logger = get_logger(__name__)
 
@@ -69,6 +76,9 @@ class ProcessingResults:
         self.lyrics_length = 0
         self.lyrics_line_count = 0
 
+        self.grammatical_correction_success = False
+        self.grammatical_correction_applied = False
+
         self.lrc_generation_success = False
         self.lrc_line_count = 0
         self.lrc_has_timestamps = False
@@ -105,6 +115,8 @@ class ProcessingResults:
             'lyrics_source': self.lyrics_source,
             'lyrics_length': self.lyrics_length,
             'lyrics_line_count': self.lyrics_line_count,
+            'grammatical_correction_success': self.grammatical_correction_success,
+            'grammatical_correction_applied': self.grammatical_correction_applied,
             'lrc_generation_success': self.lrc_generation_success,
             'lrc_line_count': self.lrc_line_count,
             'lrc_has_timestamps': self.lrc_has_timestamps,
@@ -123,128 +135,6 @@ class ProcessingResults:
         self.processing_duration_seconds = end_time - self.start_time
 
 
-def parse_transcript_segments(transcript_content: str) -> List[SimpleNamespace]:
-    """Parse transcript content back to segments format."""
-    lines = transcript_content.split('\n')
-    segments = []
-
-    for line in lines:
-        # Match timestamp format like [0.92s -> 4.46s] ああ 素晴らしき世界に今日も乾杯
-        match = re.match(r'\[([\d.]+)s -> ([\d.]+)s\]\s*(.*)', line.strip())
-        if match:
-            start_time = float(match.group(1))
-            end_time = float(match.group(2))
-            text = match.group(3).strip()
-            segment = SimpleNamespace(start=start_time, end=end_time, text=text)
-            segments.append(segment)
-
-    return segments
-
-
-def extract_lyrics_content(lyrics_content: str) -> str:
-    """Extract actual lyrics content from lyrics file format."""
-    lines = lyrics_content.split('\n')
-    lyrics_lines = []
-
-    # Find where actual lyrics start (after headers)
-    for i, line in enumerate(lines):
-        if line.startswith("=" * 10):  # Start of actual lyrics
-            lyrics_lines = lines[i+1:]
-            break
-    else:
-        lyrics_lines = lines[3:]  # Skip title and header lines
-
-    return '\n'.join(lyrics_lines).strip()
-
-
-def convert_transcript_to_lrc(asr_transcript: str) -> str:
-    """Convert ASR transcript to LRC format when no lyrics are available."""
-    lines = asr_transcript.split('\n')
-    lrc_lines = []
-
-    for line in lines:
-        # Match timestamp format like [0.92s -> 4.46s] ああ 素晴らしき世界に今日も乾杯
-        match = re.match(r'\[([\d.]+)s -> ([\d.]+)s\]\s*(.*)', line.strip())
-        if match:
-            start_time = float(match.group(1))
-            text = match.group(3).strip()
-
-            if text:  # Only add non-empty lines
-                # Convert seconds to [mm:ss.xx] format
-                minutes = int(start_time // 60)
-                seconds = int(start_time % 60)
-                hundredths = int((start_time % 1) * 100)
-                lrc_line = f'[{minutes:02d}:{seconds:02d}.{hundredths:02d}]{text}'
-                lrc_lines.append(lrc_line)
-
-    return '\n'.join(lrc_lines)
-
-
-def should_skip_file(paths: dict, resume: bool) -> bool:
-    """Check if all output files already exist and should be skipped."""
-    return resume and all(Path(path).exists() for path in paths.values())
-
-
-def write_csv_results(csv_file_path: str, results: list) -> bool:
-    """
-    Write processing results to CSV file.
-
-    Args:
-        csv_file_path (str): Path to the CSV file to write
-        results (list): List of result dictionaries to write
-
-    Returns:
-        bool: True if writing was successful, False otherwise
-    """
-    if not results:
-        logger.warning("No results to write to CSV")
-        return False
-
-    try:
-        with open(csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
-            # Define CSV columns based on our data structure
-            fieldnames = [
-                # File information
-                'filename', 'file_path', 'processing_start_time',
-
-                # Metadata extraction results
-                'metadata_success', 'metadata_title', 'metadata_artist', 'metadata_album',
-                'metadata_genre', 'metadata_year', 'metadata_track_number',
-
-                # Vocal separation results
-                'vocals_separation_success', 'vocals_file_path', 'vocals_file_size',
-
-                # Transcription results
-                'transcription_success', 'transcription_segments_count', 'transcription_duration',
-
-                # Lyrics search results
-                'lyrics_search_success', 'lyrics_source', 'lyrics_length', 'lyrics_line_count',
-
-                # LRC generation results
-                'lrc_generation_success', 'lrc_line_count', 'lrc_has_timestamps',
-
-                # Translation results
-                'translation_success', 'translation_target_language',
-
-                # Overall results
-                'overall_success', 'processing_end_time', 'processing_duration_seconds', 'error_message'
-            ]
-
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-            # Write header
-            writer.writeheader()
-
-            # Write data rows
-            for result in results:
-                writer.writerow(result)
-
-        logger.info(f"CSV results written to: {csv_file_path}")
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to write CSV results to {csv_file_path}: {e}")
-        return False
 
 
 def extract_metadata_step(input_file: Path, results: ProcessingResults) -> bool:
@@ -276,6 +166,8 @@ def extract_metadata_step(input_file: Path, results: ProcessingResults) -> bool:
 def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: ProcessingResults, temp_dir: str = "tmp") -> bool:
     """Step 2: Separate vocals using UVR."""
     vocals_path = paths['vocals_wav']
+    
+    logger.info("Step 2: Separating vocals using UVR...")
 
     if resume and vocals_path.exists():
         logger.info(f"Vocals file already exists for {input_file}, skipping vocal separation...")
@@ -286,10 +178,8 @@ def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: P
             results.vocals_file_size = Path(vocals_file).stat().st_size
         return True
 
-    logger.info("Step 2: Separating vocals using UVR...")
-
     try:
-        vocals_file = separate_vocals(str(input_file), output_dir=temp_dir)
+        vocals_file = separate_vocals(str(input_file), output_dir=temp_dir, vocals_output_path=str(paths['vocals_wav']))
         if vocals_file and Path(vocals_file).exists():
             results.vocals_separation_success = True
             results.vocals_file_path = vocals_file
@@ -312,14 +202,14 @@ def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: P
 def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results: ProcessingResults) -> Optional[List[SimpleNamespace]]:
     """Step 3: Transcribe vocals with ASR and timestamps."""
     transcript_path = paths['transcript_txt']
+    
+    logger.info("Step 3: Transcribing vocals with ASR...")
 
     if resume and transcript_path.exists():
         logger.info(f"ASR transcript already exists for {vocals_file}, skipping ASR...")
         logger.info("Loading existing ASR transcript...")
         transcript_content = read_transcript_file(str(transcript_path))
         return parse_transcript_segments(transcript_content)
-
-    logger.info("Step 3: Transcribing vocals with ASR...")
 
     try:
         segments = transcribe_with_timestamps(vocals_file)
@@ -351,9 +241,38 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
         return None
 
 
-def search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: ProcessingResults) -> Optional[str]:
+def search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: ProcessingResults, transcript_content: Optional[str] = None) -> Optional[str]:
     """Step 4: Search for lyrics online."""
-    if not (metadata['title'] and metadata['artist']):
+
+    # Check if we have metadata
+    has_metadata = metadata['title'] and metadata['artist']
+
+    # If no metadata but we have transcript, try to identify song from ASR
+    if not has_metadata and transcript_content:
+        logger.info("No metadata available, attempting to identify song from ASR transcript...")
+
+        # Define result file path for song identification caching
+        song_id_result_path = paths['transcript_txt'].with_name(f"{results.filename.replace('.', '_')}_song_identification.json")
+
+        identified_song = identify_song_from_asr(transcript_content, str(song_id_result_path))
+
+        if identified_song:
+            song_title, artist_name, native_language = identified_song
+            logger.info(f"Successfully identified song from ASR: '{song_title}' by {artist_name} ({native_language})")
+
+            # Update metadata with identified information
+            metadata['title'] = song_title
+            metadata['artist'] = artist_name
+            results.metadata_title = song_title
+            results.metadata_artist = artist_name
+            has_metadata = True
+            results.lyrics_source = f'uta-net.com (identified from ASR: {native_language})'
+        else:
+            logger.warning("Could not identify song from ASR transcript")
+            results.lyrics_search_success = False
+            return None
+
+    if not has_metadata:
         logger.info("Skipping lyrics search due to missing title or artist metadata")
         results.lyrics_search_success = False
         return None
@@ -408,36 +327,94 @@ def search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: Proce
         return None
 
 
-def generate_lrc_step(lyrics_content: Optional[str], transcript_path: str, paths: dict, resume: bool, results: ProcessingResults) -> bool:
+def grammatical_correction_step(paths: dict, resume: bool, results: ProcessingResults) -> Optional[str]:
+    """Step 4.5: Apply grammatical correction to ASR transcript if no lyrics found."""
+
+    corrected_transcript_path = paths['corrected_transcript_txt']
+
+    # Check for existing corrected transcript file when resuming
+    if resume and corrected_transcript_path.exists():
+        logger.info("Corrected transcript file already exists, skipping grammatical correction...")
+        try:
+            corrected_content = read_transcript_file(str(corrected_transcript_path))
+            results.grammatical_correction_success = True
+            results.grammatical_correction_applied = True  # Assume it was applied if file exists
+            return corrected_content
+        except Exception as e:
+            results.grammatical_correction_success = False
+            results.error_message = f"Failed to read existing corrected transcript: {e}"
+            logger.error(f"Failed to read existing corrected transcript: {e}")
+            return None
+
+    logger.info("Step 4.5: Applying grammatical correction to ASR transcript...")
+
+    try:
+        # Initialize OpenAI client for grammatical correction
+        load_dotenv()
+        config = get_openai_config()
+
+        client = OpenAI(base_url=config["OPENAI_BASE_URL"], api_key=config["OPENAI_API_KEY"])
+
+        # Read the ASR transcript for correction
+        transcript_path = str(paths['transcript_txt'])
+        asr_transcript = read_transcript_file(transcript_path)
+
+        # Apply grammatical correction
+        corrected_transcript = correct_grammar_in_transcript(client, asr_transcript, results.filename, config["OPENAI_MODEL"])
+
+        if corrected_transcript and corrected_transcript != asr_transcript:
+            results.grammatical_correction_success = True
+            results.grammatical_correction_applied = True
+
+            # Save corrected transcript to file for debugging and resume
+            corrected_file = str(corrected_transcript_path)
+            with open(corrected_file, 'w', encoding='utf-8') as f:
+                f.write("Grammatically Corrected Transcription:\n\n")
+                f.write(corrected_transcript)
+                f.write(f"\n\nSource: Corrected from ASR transcript")
+
+            logger.info(f"Grammatical correction applied successfully and saved to: {corrected_file}")
+            return corrected_transcript
+        else:
+            results.grammatical_correction_success = True
+            results.grammatical_correction_applied = False
+            logger.info("No grammatical corrections needed or correction failed")
+            return None
+
+    except Exception as e:
+        results.grammatical_correction_success = False
+        results.error_message = f"Grammatical correction failed: {e}"
+        logger.error(f"Exception during grammatical correction: {e}")
+        return None
+
+def generate_lrc_step(lyrics_content: Optional[str], corrected_transcript_content: Optional[str], transcript_path: str, paths: dict, resume: bool, results: ProcessingResults) -> bool:
     """Step 5: Generate LRC file by combining lyrics and ASR transcript."""
     lrc_path = paths['lrc']
+    
+    logger.info("Step 5: Generating LRC file...")
 
     if resume and lrc_path.exists():
         logger.info(f"LRC file already exists, skipping LRC generation...")
         with open(lrc_path, 'r', encoding='utf-8') as f:
             lrc_lyrics = f.read()
     else:
-        logger.info("Step 5: Generating LRC file...")
-
         # Initialize OpenAI client
         load_dotenv()
-        base_url = os.getenv("OPENAI_BASE_URL", "https://api-inference.modelscope.cn/v1")
-        api_key = os.getenv("OPENAI_API_KEY", "")
+        config = get_openai_config()
 
-        if not api_key:
-            logger.error("Error: OPENAI_API_KEY environment variable not set")
-            return False
-
-        client = OpenAI(base_url=base_url, api_key=api_key)
+        client = OpenAI(base_url=config["OPENAI_BASE_URL"], api_key=config["OPENAI_API_KEY"])
 
         # Read transcript file content
         asr_transcript = read_transcript_file(transcript_path)
 
         # Generate LRC
         if lyrics_content:
-            lrc_lyrics = generate_lrc_lyrics(client, lyrics_content, asr_transcript)
+            lrc_lyrics = generate_lrc_lyrics(client, lyrics_content, asr_transcript, config["OPENAI_MODEL"])
+        elif corrected_transcript_content:
+            logger.info("No lyrics found, using grammatically corrected transcript for LRC generation...")
+            lrc_lyrics = generate_lrc_lyrics(client, corrected_transcript_content, asr_transcript, config["OPENAI_MODEL"])
         else:
-            logger.info("No lyrics found, converting ASR transcript to LRC format...")
+            logger.info("No lyrics found and no corrected transcript, converting ASR transcript to LRC format...")
             lrc_lyrics = convert_transcript_to_lrc(asr_transcript)
 
         if lrc_lyrics:
@@ -466,11 +443,12 @@ def translate_lrc_step(lrc_path: str, paths: dict, resume: bool, log_level: int,
     """Step 6: Add translation to Traditional Chinese."""
     translated_lrc_path = paths['translated_lrc']
 
+    logger.info("Step 6: Adding translation to Traditional Chinese...")
+
     if resume and translated_lrc_path.exists():
         logger.info(f"Translated LRC file already exists, skipping translation...")
         return True
-
-    logger.info("Step 6: Adding translation to Traditional Chinese...")
+    
     success = translate_main(lrc_path, str(translated_lrc_path), "Traditional Chinese", log_level)
 
     if success:
@@ -485,18 +463,19 @@ def translate_lrc_step(lrc_path: str, paths: dict, resume: bool, log_level: int,
     return success
 
 
-def process_single_flac_file(
+def process_single_audio_file(
     input_file: Path,
     output_dir: str = "output",
     temp_dir: str = "tmp",
     resume: bool = True,
-    log_level: int = logging.INFO
+    log_level: int = logging.INFO,
+    input_dir: str = "input"
 ) -> Tuple[bool, dict]:
     """
-    Process a single FLAC file through the entire workflow.
+    Process a single audio file (FLAC or MP3) through the entire workflow.
 
     Args:
-        input_file (Path): Input FLAC file path
+        input_file (Path): Input audio file path (FLAC or MP3)
         output_dir (str): Output directory for final LRC files
         temp_dir (str): Temporary directory for intermediate files
         resume (bool): Whether to resume processing by skipping files that already have output
@@ -511,17 +490,17 @@ def process_single_flac_file(
 
     logger.info(f"Processing file: {input_file}")
 
-    # Get output file paths
-    paths = get_output_paths(input_file, output_dir, temp_dir)
+    # Get output file paths (preserving nested folder structure)
+    paths = get_output_paths(input_file, output_dir, temp_dir, input_dir)
 
     # Create temp directory if it doesn't exist
     Path(temp_dir).mkdir(parents=True, exist_ok=True)
 
     # Check if all outputs already exist and skip if requested
-    if should_skip_file(paths, resume):
-        logger.info(f"All output files already exist for {input_file}, skipping...")
-        results.finalize()
-        return True, results.to_dict()
+    # if should_skip_file(paths, resume):
+    #     logger.info(f"All output files already exist for {input_file}, skipping...")
+    #     results.finalize()
+    #     return True, results.to_dict()
 
     try:
         # Step 1: Extract metadata
@@ -540,6 +519,14 @@ def process_single_flac_file(
             results.finalize()
             return False, results.to_dict()
 
+        # Read transcript content for potential song identification
+        transcript_path = str(paths['transcript_txt'])
+        transcript_content = None
+        try:
+            transcript_content = read_transcript_file(transcript_path)
+        except Exception as e:
+            logger.warning(f"Could not read transcript file for song identification: {e}")
+
         # Step 4: Search for lyrics
         lyrics_content = search_lyrics_step(
             {
@@ -552,12 +539,18 @@ def process_single_flac_file(
             },
             paths,
             resume,
-            results
+            results,
+            transcript_content
         )
+
+        # Step 4.5: Apply grammatical correction if lyrics not found
+        corrected_transcript_content = None
+        if not lyrics_content:
+            corrected_transcript_content = grammatical_correction_step(paths, resume, results)
 
         # Step 5: Generate LRC file
         transcript_path = str(paths['transcript_txt'])
-        if not generate_lrc_step(lyrics_content, transcript_path, paths, resume, results):
+        if not generate_lrc_step(lyrics_content, corrected_transcript_content, transcript_path, paths, resume, results):
             results.finalize()
             return False, results.to_dict()
 
@@ -580,15 +573,15 @@ def process_single_flac_file(
 
 
 def main():
-    """Main function to process all FLAC files in a directory and output results to CSV."""
+    """Main function to process all audio files (FLAC and MP3) in a directory and output results to CSV."""
     parser = argparse.ArgumentParser(
-        description='Process all FLAC files in a folder (recursive) to create LRC files with translation. Outputs detailed results to CSV.'
+        description='Process all audio files (FLAC and MP3) in a folder (recursive) to create LRC files with translation. Outputs detailed results to CSV.'
     )
     parser.add_argument(
         'input_dir',
         nargs='?',
         default='input',
-        help='Input directory containing FLAC files (default: input)'
+        help='Input directory containing audio files (FLAC or MP3) (default: input)'
     )
     parser.add_argument(
         '--output-dir', '-o',
@@ -613,17 +606,23 @@ def main():
     )
     parser.add_argument(
         '--csv-output', '-c',
-        default='output/processing_results.csv',
-        help='CSV file to save processing results (default: processing_results.csv)'
+        default=f'results_{datetime.now().strftime("%Y%m%d%H%M%S")}.csv',
+        help='CSV file to save processing results (default: processing_results_YYYYMMDD_HHMMSS.csv)'
+    )
+    parser.add_argument(
+        '--no-color',
+        action='store_true',
+        help='Disable colored logging output (default: False)'
     )
     
     args = parser.parse_args()
     
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level)
+    use_colors = not args.no_color
+    setup_logging(level=log_level, use_colors=use_colors)
     
-    logger.info(f"Starting FLAC lyric processing for directory: {args.input_dir}")
+    logger.info(f"Starting audio file lyric processing for directory: {args.input_dir}")
     
     # Ensure output directory exists
     if not ensure_output_directory(args.output_dir):
@@ -634,27 +633,27 @@ def main():
     Path(args.temp_dir).mkdir(parents=True, exist_ok=True)
     logger.info(f"Using temporary directory: {args.temp_dir}")
     
-    # Find all FLAC files
-    flac_files = find_flac_files(args.input_dir)
-    
-    if not flac_files:
-        logger.warning(f"No FLAC files found in {args.input_dir}")
+    # Find all audio files (FLAC and MP3)
+    audio_files = find_audio_files(args.input_dir)
+
+    if not audio_files:
+        logger.warning(f"No audio files (FLAC or MP3) found in {args.input_dir}")
         return 0
-    
-    # Process each FLAC file
+
+    # Process each audio file
     success_count = 0
     all_results = []
-    for flac_file in flac_files:
-        logger.info(f"Processing {flac_file} ({success_count + 1}/{len(flac_files)})")
-        success, results = process_single_flac_file(flac_file, args.output_dir, args.temp_dir, args.resume, log_level)
+    for audio_file in audio_files:
+        logger.info(f"Processing {audio_file} ({success_count + 1}/{len(audio_files)})")
+        success, results = process_single_audio_file(audio_file, args.output_dir, args.temp_dir, args.resume, log_level, args.input_dir)
         all_results.append(results)
 
         if success:
             success_count += 1
         else:
-            logger.error(f"Failed to process {flac_file}")
+            logger.error(f"Failed to process {audio_file}")
 
-    logger.info(f"Processing completed. Successfully processed {success_count}/{len(flac_files)} files.")
+    logger.info(f"Processing completed. Successfully processed {success_count}/{len(audio_files)} files.")
 
     # Write results to CSV
     logger.info(f"Writing processing results to CSV: {args.csv_output}")
@@ -663,7 +662,7 @@ def main():
     else:
         logger.error("Failed to write CSV file")
     
-    return 0 if success_count == len(flac_files) else 1
+    return 0 if success_count == len(audio_files) else 1
 
 
 if __name__ == "__main__":

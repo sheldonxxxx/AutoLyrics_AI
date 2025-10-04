@@ -14,77 +14,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from logging_config import setup_logging, get_logger
-from utils import load_prompt_template
+from utils import load_prompt_template, read_lrc_file, validate_lrc_content, get_prompt_file_for_language, get_translation_config
 
 logger = get_logger(__name__)
 
-def read_lrc_file(file_path):
-    """
-    Read the LRC file and return its content as a string.
-    
-    Args:
-        file_path (str): Path to the LRC file
-        
-    Returns:
-        str: Content of the LRC file
-    """
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    return content
 
-
-def validate_lrc_content(content):
-    """
-    Validate that the LRC content has proper format.
-    
-    Args:
-        content (str): LRC content to validate
-        
-    Returns:
-        bool: True if content is valid LRC format, False otherwise
-    """
-    lines = content.strip().split('\n')
-    
-    # Check if we have at least one line
-    if not lines or not lines[0].strip():
-        logger.error("LRC content is empty")
-        return False
-    
-    # Check for proper LRC timestamp format in at least some lines
-    timestamp_pattern = r'\[([0-9]{2,3}:[0-9]{2}\.[0-9]{2,3}|[0-9]{2,3}:[0-9]{2})\]'
-    has_timestamps = any(re.search(timestamp_pattern, line) for line in lines)
-    
-    if not has_timestamps:
-        logger.warning("LRC content doesn't contain any timestamp patterns")
-        return False
-    
-    # Additional validation could be added here
-    logger.info("LRC content validation passed")
-    return True
-
-
-def get_prompt_file_for_language(target_language: str) -> str:
-    """
-    Get the appropriate prompt file name for the target language.
-
-    Args:
-        target_language (str): Target language for translation
-
-    Returns:
-        str: Prompt file name for the language
-    """
-    # Map language names to prompt file names
-    language_prompt_map = {
-        "Traditional Chinese": "lrc_traditional_chinese_prompt.txt",
-        # Add more languages here as they are supported
-        # "English": "lrc_english_prompt.txt",
-        # "Japanese": "lrc_japanese_prompt.txt",
-    }
-
-    return language_prompt_map.get(target_language, "")
-
-
-def translate_lrc_content(client, lrc_content, target_language="Traditional Chinese"):
+def translate_lrc_content(client, lrc_content, target_language="Traditional Chinese", model=None):
     """
     Translate LRC content using an LLM, returning a bilingual LRC file.
 
@@ -101,7 +36,9 @@ def translate_lrc_content(client, lrc_content, target_language="Traditional Chin
         logger.warning(f"Translation to '{target_language}' is not implemented. Only 'Traditional Chinese' is supported.")
         return None
 
-    model = os.getenv("TRANSLATION_MODEL", os.getenv("OPENAI_MODEL", "qwen-plus"))
+    if model is None:
+        logger.error("Model parameter is required")
+        return None
 
     # Get the appropriate prompt file for the target language
     prompt_file_name = get_prompt_file_for_language(target_language)
@@ -145,22 +82,16 @@ def main(input_path, output_path, target_language="Traditional Chinese", log_lev
     # Set up logging with specified level
     setup_logging(level=log_level)
     
-    # Load configuration from environment variables
-    base_url = os.getenv("OPENAI_BASE_URL", os.getenv("TRANSLATION_BASE_URL", "https://api-inference.modelscope.cn/v1"))
-    api_key = os.getenv("OPENAI_API_KEY", os.getenv("TRANSLATION_API_KEY", ""))
-    model = os.getenv("TRANSLATION_MODEL", os.getenv("OPENAI_MODEL", "qwen-plus"))
-    
-    logger.debug(f"Using base_url: {base_url}")
-    logger.debug(f"Using model: {model}")
-    
-    if not api_key:
-        logger.error("Error: API key not set in environment variables")
-        return False
-    
+    # Get translation configuration using utility function
+    config = get_translation_config()
+
+    logger.debug(f"Using base_url: {config['base_url']}")
+    logger.debug(f"Using model: {config['model']}")
+
     # Initialize the OpenAI-compatible client with the custom base URL
     client = OpenAI(
-        base_url=base_url,
-        api_key=api_key
+        base_url=config["base_url"],
+        api_key=config["api_key"]
     )
     
     # Check if the input file exists
@@ -178,7 +109,7 @@ def main(input_path, output_path, target_language="Traditional Chinese", log_lev
     logger.info("Translating LRC content to bilingual format...")
     
     # Translate the entire LRC content
-    translated_lrc_content = translate_lrc_content(client, lrc_content, target_language)
+    translated_lrc_content = translate_lrc_content(client, lrc_content, target_language, config["model"])
     
     if translated_lrc_content:
         logger.info("LRC content translated successfully!")

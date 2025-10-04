@@ -10,10 +10,13 @@ The system is currently focused on processing Japanese music files, with lyrics 
 
 ## Recent Changes
 
-- Implementation of a comprehensive batch processing script (`process_flac_lyrics.py`) that orchestrates the entire workflow
+- Implementation of a comprehensive batch processing script (`process_lyrics.py`) that orchestrates the entire workflow
 - Integration with OpenAI-compatible APIs for LRC generation and translation
 - Support for bilingual LRC files (original + Traditional Chinese translation)
 - Checkpoint-based processing to skip completed steps when possible
+- **Separated UVR and ASR functionality** into distinct modules (`separate_vocals.py` and `transcribe_vocals.py`) for better modularity
+- **Implemented song-specific folder structure** - all intermediate files for each song are now organized in `tmp/{relative_path}/{filename}/` folders
+- Enhanced vocal separation with custom output path support and automatic cleanup of instrumental files
 
 ## Next Steps
 

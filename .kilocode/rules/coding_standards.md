@@ -227,6 +227,41 @@ def main():
     # ... rest of main function
 ```
 
+## Dependency Management
+
+### Package Management with uv
+- **Always use `uv add` for new dependencies** instead of manually editing `pyproject.toml`
+- Use `uv remove` when removing dependencies to ensure proper cleanup
+- Let uv handle dependency resolution and lock file management automatically
+
+```bash
+# ✅ Correct - Add new dependencies
+uv add requests>=2.32.0 beautifulsoup4>=4.14.0
+
+# ✅ Correct - Remove dependencies
+uv remove unused-package
+
+# ❌ Incorrect - Manual pyproject.toml editing
+# Don't manually edit pyproject.toml for dependency changes
+```
+
+### Dependency Guidelines
+- Pin major versions when stability is critical (e.g., `>=1.0.0,<2.0.0`)
+- Use minimum version pins for flexibility (e.g., `>=2.32.0`)
+- Group related dependencies in logical blocks in `pyproject.toml`
+- Regularly update dependencies using `uv lock --upgrade`
+- Test thoroughly after major dependency updates
+
+### Virtual Environment Management
+- Always use `uv run` to execute Python scripts instead of `python` or `python3`
+- This ensures the correct virtual environment and dependencies are used
+- Examples:
+  ```bash
+  uv run python script.py                    # Run a Python script
+  uv run python -m py_compile file.py       # Compile Python files
+  uv run python -c "import module"          # Test module imports
+  ```
+
 ## Performance Considerations
 
 ### Efficient Processing

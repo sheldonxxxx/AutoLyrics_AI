@@ -42,12 +42,21 @@ Output: Synchronized LRC files in output directory
   - Handles rate limiting with delays between requests
 
 #### 3. `separate_vocals.py`
-- **Purpose**: Separate vocals from music and transcribe with timestamps
-- **Technology**: Uses `audio-separator` for vocal separation and `faster-whisper` for ASR
+- **Purpose**: Separate vocals from music using UVR
+- **Technology**: Uses `audio-separator` for vocal separation
 - **Features**:
- - Uses UVR (UVR_MDXNET_Main) model for vocal separation
+  - Uses UVR (UVR_MDXNET_Main) model for vocal separation
+  - Supports custom output paths for song-specific folder organization
+  - CPU-based processing for compatibility
+  - Automatic cleanup of instrumental files to save disk space
+
+#### 3.1. `transcribe_vocals.py`
+- **Purpose**: Transcribe vocals with timestamped transcription
+- **Technology**: Uses `faster-whisper` for ASR transcription
+- **Features**:
   - Generates timestamped transcription with word-level timestamps
   - CPU-based processing for compatibility
+  - Standalone CLI interface for transcription-only operations
 
 #### 4. `generate_lrc.py`
 - **Purpose**: Generate LRC format lyrics by combining reference lyrics and ASR transcript
@@ -83,12 +92,15 @@ Output: Synchronized LRC files in output directory
 #### Output Directory Structure
 ```
 tmp/ (temporary files)
-├── {filename}_(Vocals)_UVR_MDXNET_Main.wav (separated vocals)
-├── {filename}_(Vocals)_UVR_MDXNET_Main_transcript.txt (ASR transcript)
-├── {filename}_lyrics.txt (downloaded lyrics)
-└── {filename}.lrc (generated LRC)
+└── {relative_path}/
+    └── {filename}/ (song-specific folder)
+        ├── {filename}_(Vocals)_UVR_MDXNET_Main.wav (separated vocals)
+        ├── {filename}_(Vocals)_UVR_MDXNET_Main_transcript.txt (ASR transcript)
+        ├── {filename}_lyrics.txt (downloaded lyrics)
+        └── {filename}.lrc (generated LRC)
 output/ (final files)
-└── {filename}.lrc (translated bilingual LRC)
+└── {relative_path}/
+    └── {filename}.lrc (translated bilingual LRC)
 ```
 
 ### Technical Architecture

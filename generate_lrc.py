@@ -11,7 +11,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import logging
 from logging_config import setup_logging, get_logger
-from utils import load_prompt_template
+from utils import load_prompt_template, read_lyrics_file, read_transcript_file, convert_transcript_to_lrc, get_openai_config
 
 logger = get_logger(__name__)
 
@@ -19,67 +19,7 @@ logger = get_logger(__name__)
 load_dotenv()
 
 
-def read_lyrics_file(file_path):
-    """
-    Read the downloaded lyrics from file.
-    
-    Args:
-        file_path (str): Path to the lyrics file
-        
-    Returns:
-        str: Content of the lyrics file
-    """
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read()
-
-
-def read_transcript_file(file_path):
-    """
-    Read the ASR transcript from file.
-    
-    Args:
-        file_path (str): Path to the transcript file
-        
-    Returns:
-        str: Content of the transcript file
-    """
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read()
-
-
-def convert_transcript_to_lrc(transcript_text):
-    """
-    Convert the ASR transcript to LRC format for better alignment.
-    
-    Args:
-        transcript_text (str): ASR transcript with timestamps
-        
-    Returns:
-        str: Transcript in LRC format
-    """
-    lines = transcript_text.split('\n')
-    lrc_lines = []
-    
-    for line in lines:
-        # Match timestamp format like [0.92s -> 4.46s] ああ 素晴らしき世界に今日も乾杯
-        match = re.match(r'\[([\d.]+)s -> ([\d.]+)s\]\s*(.*)', line.strip())
-        if match:
-            start_time = float(match.group(1))
-            end_time = float(match.group(2))
-            text = match.group(3).strip()
-            
-            if text:  # Only add non-empty lines
-                # Convert seconds to [mm:ss.xx] format
-                minutes = int(start_time // 60)
-                seconds = int(start_time % 60)
-                hundredths = int((start_time % 1) * 100)
-                lrc_line = f'[{minutes:02d}:{seconds:02d}.{hundredths:02d}]{text}'
-                lrc_lines.append(lrc_line)
-    
-    return '\n'.join(lrc_lines)
-
-
-def generate_lrc_lyrics(client, lyrics_text, asr_transcript):
+def generate_lrc_lyrics(client, lyrics_text, asr_transcript, model=None):
     """
     Generate LRC format lyrics by combining downloaded lyrics and ASR transcript
     using an LLM.
@@ -95,8 +35,9 @@ def generate_lrc_lyrics(client, lyrics_text, asr_transcript):
     # Convert ASR transcript to LRC format for better alignment
     lrc_transcript = convert_transcript_to_lrc(asr_transcript)
 
-    model = os.getenv("OPENAI_MODEL", "Qwen/Qwen3-235B-A22B-Instruct-2507")
-    # model = "deepseek-ai/DeepSeek-R1-0528"
+    if model is None:
+        logger.error("Model parameter is required")
+        return None
 
     # Load prompt template from file
     prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "lrc_generation_prompt.txt")
@@ -118,15 +59,64 @@ def generate_lrc_lyrics(client, lyrics_text, asr_transcript):
                     "content": prompt
                 }
             ],
+            extra_body={"enable_thinking": False},
             temperature=0.1,  # Low temperature for more consistent output
             # max_tokens=4000
         )
         
         return response.choices[0].message.content.strip()
-    
+
     except Exception as e:
         logger.error(f"Error generating LRC lyrics: {e}")
         return None
+
+
+def correct_grammar_in_transcript(client, asr_transcript, filename=None, model=None):
+    """
+    Correct grammatical errors in ASR transcript using an LLM.
+
+    Args:
+        client: OpenAI client instance
+        asr_transcript (str): Raw ASR transcript that may contain grammatical errors
+        filename (str, optional): Original audio filename for context
+
+    Returns:
+        str: Grammatically corrected transcript
+    """
+    if model is None:
+        logger.error("Model parameter is required")
+        return asr_transcript  # Return original if model not provided
+
+    # Load prompt template from file
+    prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "grammatical_correction_prompt.txt")
+    prompt_template = load_prompt_template(prompt_template_path)
+
+    if not prompt_template:
+        logger.error("Failed to load grammatical correction prompt template")
+        return asr_transcript  # Return original if prompt loading fails
+
+    # Format the prompt with actual data
+    prompt = prompt_template.format(asr_transcript=asr_transcript, filename=filename or "Unknown")
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.1,  # Low temperature for consistent corrections
+        )
+
+        corrected_transcript = response.choices[0].message.content.strip()
+        logger.info("Grammatical correction completed successfully")
+        return corrected_transcript
+
+    except Exception as e:
+        logger.error(f"Error correcting grammar in transcript: {e}")
+        return asr_transcript  # Return original if correction fails
 
 def main():
     # Set up argument parser
@@ -148,18 +138,13 @@ def main():
     log_level = getattr(logging, args.log_level.upper())
     setup_logging(level=log_level)
     
-    # Load configuration from environment variables
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api-inference.modelscope.cn/v1")
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    
-    if not api_key:
-        logger.error("Error: OPENAI_API_KEY environment variable not set")
-        return
-    
+    # Get OpenAI configuration using utility function
+    config = get_openai_config()
+
     # Initialize the OpenAI client with the custom base URL
     client = OpenAI(
-        base_url=base_url,
-        api_key=api_key
+        base_url=config["OPENAI_BASE_URL"],
+        api_key=config["OPENAI_API_KEY"]
     )
     
     # Define file paths
@@ -185,7 +170,7 @@ def main():
     logger.info("Generating LRC formatted lyrics...")
     
     # Generate the LRC lyrics
-    lrc_lyrics = generate_lrc_lyrics(client, lyrics_text, asr_transcript)
+    lrc_lyrics = generate_lrc_lyrics(client, lyrics_text, asr_transcript, config["OPENAI_MODEL"])
     
     if lrc_lyrics:
         logger.info("LRC lyrics generated successfully!")

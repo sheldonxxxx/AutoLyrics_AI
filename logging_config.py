@@ -9,15 +9,43 @@ from pathlib import Path
 import os
 
 
-def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_handlers=True):
+class ColoredFormatter(logging.Formatter):
+    """A custom formatter that adds colors to log messages based on log level."""
+
+    # ANSI color codes
+    COLORS = {
+        'DEBUG': '\033[36m',    # Cyan
+        'INFO': '\033[32m',     # Green
+        'WARNING': '\033[33m',  # Yellow
+        'ERROR': '\033[31m',    # Red
+        'CRITICAL': '\033[35m', # Magenta
+        'RESET': '\033[0m'      # Reset to default
+    }
+
+    def format(self, record):
+        # Add color to the level name
+        if record.levelname in self.COLORS:
+            colored_levelname = f"{self.COLORS[record.levelname]}{record.levelname}{self.COLORS['RESET']}"
+            # Create a copy of the record to avoid modifying the original
+            record = logging.LogRecord(
+                record.name, record.levelno, record.pathname, record.lineno,
+                record.msg, record.args, record.exc_info
+            )
+            record.levelname = colored_levelname
+
+        return super().format(record)
+
+
+def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_handlers=True, use_colors=True):
     """
     Set up consistent logging configuration for all scripts.
-    
+
     Args:
         level: Logging level (default: logging.INFO)
         log_file: Optional file path to log to a file
         log_format: Custom log format string
         clear_handlers: Whether to clear existing handlers (default: True)
+        use_colors: Whether to use colored output for console (default: True)
     """
     # Default log format
     if log_format is None:
@@ -39,7 +67,24 @@ def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_hand
     
     # Console handler with color support
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
+
+    # Use colored formatter for console if requested and supported
+    if use_colors:
+        try:
+            # Test if terminal supports colors (basic check)
+            import shutil
+            if hasattr(sys.stdout, 'isatty') and sys.stdout.isatty():
+                # Use colored formatter for console
+                colored_formatter = ColoredFormatter(log_format, datefmt='%Y-%m-%d %H:%M:%S')
+                console_handler.setFormatter(colored_formatter)
+            else:
+                console_handler.setFormatter(formatter)
+        except Exception:
+            # Fall back to regular formatter if color setup fails
+            console_handler.setFormatter(formatter)
+    else:
+        console_handler.setFormatter(formatter)
+
     logger.addHandler(console_handler)
     
     # File handler if specified

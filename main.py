@@ -9,6 +9,7 @@ import argparse
 import os
 import sys
 from logging_config import setup_logging, get_logger
+from utils import get_openai_config
 
 logger = get_logger(__name__)
 
@@ -116,16 +117,11 @@ def main():
         # Load environment variables
         load_dotenv()
         
-        # Load configuration from environment variables
-        base_url = os.getenv("OPENAI_BASE_URL", "https://api-inference.modelscope.cn/v1")
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        
-        if not api_key:
-            logger.error("Error: OPENAI_API_KEY environment variable not set")
-            return
-        
+        # Get OpenAI configuration using utility function
+        config = get_openai_config()
+
         # Initialize the OpenAI client with the custom base URL
-        client = OpenAI(base_url=base_url, api_key=api_key)
+        client = OpenAI(base_url=config["OPENAI_BASE_URL"], api_key=config["OPENAI_API_KEY"])
         
         # Define file paths
         lyrics_file_path = f"output/{os.path.splitext(os.path.basename(args.file))[0]}_lyrics.txt"
@@ -150,7 +146,7 @@ def main():
         logger.info("Generating LRC formatted lyrics...")
         
         # Generate the LRC lyrics
-        lrc_lyrics = generate_lrc_lyrics(client, lyrics_text, asr_transcript)
+        lrc_lyrics = generate_lrc_lyrics(client, lyrics_text, asr_transcript, config["OPENAI_MODEL"])
         
         if lrc_lyrics:
             logger.info("LRC lyrics generated successfully!")
