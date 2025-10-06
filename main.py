@@ -1,7 +1,31 @@
 #!/usr/bin/env python3
 """
-Main entry point for the music lyric processing pipeline.
-This script coordinates the various components of the music lyric processing system.
+Command-line interface and module coordinator for the Music Lyrics Processing Pipeline.
+
+This module serves as the primary entry point for the pipeline, providing a unified
+command-line interface for accessing individual components and orchestrating workflows.
+For comprehensive documentation, see: docs/modules/main.md
+
+Key Features:
+- Six main actions for different pipeline operations
+- Dynamic module loading and coordination
+- Individual component testing capabilities
+- Centralized error handling and reporting
+
+Supported Actions:
+- overview: Display system information and help
+- metadata: Extract metadata from audio files
+- search: Search for lyrics using metadata
+- separate: Separate vocals and transcribe
+- generate: Generate LRC files from lyrics/transcripts
+- translate: Translate LRC files to Traditional Chinese
+
+Dependencies:
+- logging_config (centralized logging)
+- utils (API configuration)
+- All pipeline modules (dynamic loading)
+
+Usage: python main.py [action] --file [audio_file] --log-level [level]
 """
 
 import logging

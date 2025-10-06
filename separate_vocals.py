@@ -1,7 +1,23 @@
 #!/usr/bin/env python3
 """
-Script to preprocess audio files using audio-separator to extract vocals only.
-Transcription functionality has been moved to transcribe_vocals.py.
+Separate vocals from audio files using AI-powered source separation.
+
+This module handles vocal separation for the Music Lyrics Processing Pipeline.
+For comprehensive documentation, see: docs/modules/separate_vocals.md
+
+Key Features:
+- AI-powered vocal isolation using UVR models
+- Multi-format audio support (FLAC, MP3, WAV, M4A)
+- Organized output with automatic cleanup
+- CPU-compatible processing
+
+Dependencies:
+- audio-separator[cpu]>=0.39.0 (AI-powered separation)
+- logging_config (pipeline logging)
+
+Model: UVR-MDX-NET-Main (optimized for vocal separation)
+
+Pipeline Stage: 2/6 (Vocal Separation)
 """
 
 import os

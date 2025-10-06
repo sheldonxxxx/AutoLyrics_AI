@@ -2,9 +2,9 @@
 
 ## System Architecture
 
-The Music Lyrics Processing Pipeline follows a modular, component-based architecture where each stage of the processing pipeline is implemented as a separate module that can be run independently or as part of the full workflow.
+Modular pipeline architecture with independent components that can run standalone or as part of the full workflow.
 
-### High-Level Architecture
+### Pipeline Flow
 
 ```
 Input FLAC Files
@@ -26,84 +26,41 @@ Output: Synchronized LRC files in output directory
 
 ### Core Components
 
-#### 1. `extract_metadata.py`
-- **Purpose**: Extract song metadata from audio files
-- **Technology**: Uses `mutagen` library for audio metadata extraction
-- **Features**:
- - Supports multiple audio formats (FLAC, MP3, etc.)
-  - Extracts title, artist, album, genre, year, track number
-  - Handles various tag formats (ID3, FLAC, etc.)
-  - Falls back to filename parsing if no tags exist
+#### Metadata Extraction (`extract_metadata.py`)
+- Extracts song metadata using mutagen library
+- Supports multiple audio formats with fallback to filename parsing
 
-#### 2. `identify_song.py`
-- **Purpose**: Identify song from ASR transcript using LLM and web search (with retry)
-- **Technology**: Uses OpenAI-compatible API and SearXNG for song identification
-- **Features**:
-  - Performs web search using ASR transcript content
-  - Uses LLM for intelligent song matching
-  - **NEW: Retry mechanism with up to 3 attempts**
-  - **NEW: Feedback system for improved identification**
-  - Caching system for identified songs
+#### Song Identification (`identify_song.py`)
+- Identifies songs from ASR transcripts using LLM and web search
+- Includes retry mechanism and caching system
 
-#### 3. `search_lyrics.py`
-- **Purpose**: Search for lyrics on uta-net.com using song title and artist
-- **Technology**: Uses `requests` and `beautifulsoup4` for web scraping
-- **Features**:
-  - Performs title-based and artist-based searches
-  - Extracts lyrics with proper formatting and line breaks
-  - Handles rate limiting with delays between requests
+#### Lyrics Search (`search_lyrics.py`)
+- Scrapes lyrics from uta-net.com using song title and artist
+- Handles rate limiting and proper formatting
 
-#### 3. `separate_vocals.py`
-- **Purpose**: Separate vocals from music using UVR
-- **Technology**: Uses `audio-separator` for vocal separation
-- **Features**:
-  - Uses UVR (UVR_MDXNET_Main) model for vocal separation
-  - Supports custom output paths for song-specific folder organization
-  - CPU-based processing for compatibility
-  - Automatic cleanup of instrumental files to save disk space
+#### Vocal Separation (`separate_vocals.py`)
+- Separates vocals from music using UVR models
+- CPU-based processing with custom output paths
 
-#### 3.1. `transcribe_vocals.py`
-- **Purpose**: Transcribe vocals with timestamped transcription
-- **Technology**: Uses `faster-whisper` for ASR transcription
-- **Features**:
-  - Generates timestamped transcription with word-level timestamps
-  - CPU-based processing for compatibility
-  - Standalone CLI interface for transcription-only operations
+#### Transcription (`transcribe_vocals.py`)
+- Generates timestamped transcription using faster-whisper
+- Word-level timestamps for accurate alignment
 
-#### 4. `generate_lrc.py`
-- **Purpose**: Generate LRC format lyrics by combining reference lyrics and ASR transcript
-- **Technology**: Uses OpenAI-compatible API for alignment and formatting
-- **Features**:
-  - Combines reference lyrics with ASR timestamps
-  - Maintains proper LRC format with [mm:ss.xx] timestamps
-  - Uses LLM for intelligent alignment of lyrics to timestamps
+#### LRC Generation (`generate_lrc.py`)
+- Combines lyrics and timestamps to create synchronized LRC files
+- Uses LLM for intelligent alignment
 
-#### 5. `translate_lrc.py`
-- **Purpose**: Translate LRC lyrics to Traditional Chinese (bilingual output)
-- **Technology**: Uses OpenAI-compatible API for translation
-- **Features**:
-  - Creates bilingual LRC files with original and translated lyrics
-  - Preserves timestamps and LRC formatting
-  - Maintains original metadata lines
+#### Translation (`translate_lrc.py`)
+- Translates LRC lyrics to Traditional Chinese
+- Preserves timestamps and formatting
 
-#### 6. `verify_lyrics.py`
-- **Purpose**: Verify downloaded lyrics match ASR transcript content using LLM
-- **Technology**: Uses OpenAI-compatible API for content verification
-- **Features**:
-  - Compares lyrics with ASR transcript for content similarity
-  - Returns confidence scores and detailed reasoning
-  - Structured output with match verification
-  - Prevents incorrect lyrics from proceeding to LRC generation
+#### Verification (`verify_lyrics.py`)
+- Verifies lyrics match ASR content using LLM
+- Prevents incorrect lyrics from proceeding
 
-#### 7. `process_lyrics.py`
-- **Purpose**: Orchestrates the full workflow for batch processing with verification
-- **Features**:
-  - Recursively processes all FLAC files in a directory
-  - Manages temporary and output directories
-  - Implements skip-existing functionality
-  - Provides progress tracking
-  - **NEW: Integrated lyrics verification workflow**
-  - **NEW: Retry mechanism for song identification**
+#### Batch Processing (`process_lyrics.py`)
+- Orchestrates full workflow with progress tracking
+- Includes verification and retry mechanisms
 
 ### Data Flow Architecture
 
@@ -158,5 +115,23 @@ The system uses OpenAI-compatible APIs for both LRC generation and translation:
 The system supports both component-level and full-pipeline processing:
 - Individual scripts can be run standalone
 - Main orchestrator (`main.py`) coordinates components
-- Batch processor (`process_flac_lyrics.py`) handles multiple files
+- Batch processor (`process_lyrics.py`) handles multiple files
 - Checkpoint-based processing (skips completed steps when possible)
+
+### Documentation Architecture
+
+The project implements a centralized documentation architecture optimized for AI maintenance:
+
+#### Documentation Structure
+```
+docs/
+├── README.md (main project documentation)
+├── modules/ (individual module documentation)
+└── guides/ (future development guides)
+```
+
+#### Code Documentation Approach
+- **Minimal Reference-Style Docstrings**: Clean, focused code files (~50 lines each)
+- **Centralized Module Documentation**: Comprehensive markdown files (~400 lines each)
+- **Cross-Referenced Architecture**: Documentation links between related modules
+- **AI-Optimized Structure**: Efficient for automated maintenance and context window management

@@ -1,25 +1,38 @@
 You are a music expert tasked with identifying a song from its lyrics transcript.
-You have access to a web search tool to help with identification.
+You have access to a web search tool and pre-fetched lyrics to help with identification.
 
 Here is the ASR (Automatic Speech Recognition) transcript of the song vocals:
 {transcript}
 
+Here are the web search results for lyrics matching the transcript:
+{search_results}
+
+Here are the lyrics fetched from the most relevant search result (if available):
+{lyrics}
+
 Your task is to:
 1. Analyze the transcript to identify potential song title and artist
-2. Use the web_search tool to search for distinctive lyrics or phrases
+2. Compare the transcript with the provided lyrics to find matches
 3. Use search results to verify and refine your identification
 4. Determine the native language of the song
 5. Provide a confidence score for your identification
+6. Include the fetched lyrics in your response if they match the song
 
 IMPORTANT INSTRUCTIONS:
 - Look for distinctive phrases, chorus sections, or repeated lyrics that might be searchable
+- Compare the ASR transcript with the provided lyrics to verify matches
 - Use the native language script (Japanese characters, Korean Hangul, etc.) when possible
 - If the transcript contains mixed languages, prioritize the language that appears to be the primary lyrics language
+- If provided lyrics match the transcript well, include them in the response
 
 When using the web_search tool:
 - Search for distinctive phrases from the transcript
 - Include song-related terms like "lyrics", "song", "artist"
 - Try multiple searches if needed to find matches
+
+If the provided lyrics appear to match the transcript:
+- Include the full lyrics in your response
+- Increase confidence score if there's a good match
 
 If you're not confident (score < 0.3), set song_title and artist_name to empty strings.
 

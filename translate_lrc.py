@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
 """
-Script to translate LRC lyrics to Traditional Chinese using an OpenAI-compatible API.
+Translate LRC lyrics to Traditional Chinese creating bilingual synchronized lyrics.
+
+This module handles LRC translation for the Music Lyrics Processing Pipeline.
+For comprehensive documentation, see: docs/modules/translate_lrc.md
+
+Key Features:
+- Bilingual LRC format with preserved timing
+- Cultural adaptation and context preservation
+- Flexible API configuration (translation-specific or fallback)
+- LRC format compliance and validation
+
+Dependencies:
+- openai (API client library)
+- logging_config (pipeline logging)
+- utils (file I/O and validation)
+
+Supported Languages: Traditional Chinese (extensible architecture)
+
+Pipeline Stage: 6/6 (Translation)
 """
 
 import os

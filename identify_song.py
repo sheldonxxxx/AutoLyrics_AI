@@ -1,6 +1,26 @@
 #!/usr/bin/env python3
 """
-Script to identify song name and artist from ASR transcript using LLM and web search.
+Identify songs from ASR transcripts using LLM analysis and web search.
+
+This module provides ASR-based song identification for the Music Lyrics Processing Pipeline.
+For comprehensive documentation, see: docs/modules/identify_song.md
+
+Key Features:
+- LLM-powered song identification from ASR transcripts
+- Web search integration (SearXNG metasearch engine)
+- Retry mechanism with confidence scoring
+- Result caching for performance optimization
+
+Dependencies:
+- pydantic_ai (structured LLM interactions)
+- openai (API client library)
+- requests (web search communication)
+
+External Services:
+- SearXNG metasearch engine (SEARXNG_URL)
+- OpenAI-compatible API (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MODEL)
+
+Pipeline Stage: 2/6 (Song Identification - Fallback)
 """
 
 import os
@@ -119,7 +139,6 @@ class SongIdentification(BaseModel):
     native_language: str = Field(description="The native language of the song (e.g., 'Japanese', 'English', 'Korean')")
     search_queries_used: List[str] = Field(description="List of search queries that were used")
     reasoning: str = Field(description="Explanation of how the identification was made")
-
 
 class SongIdentifier:
     """Class to identify songs from ASR transcripts using LLM and web search."""
@@ -251,7 +270,7 @@ def identify_song_from_asr_with_retry(transcript: str, result_file_path: Optiona
         logger.info(f"Song identification attempt {attempt + 1}/{max_retries}")
 
         # Try to load existing result if file path provided and not forcing recompute
-        if not force_recompute and result_file_path and Path(result_file_path).exists() and attempt == 0:
+        if not force_recompute and result_file_path and Path(result_file_path).exists():
             try:
                 with open(result_file_path, 'r', encoding='utf-8') as f:
                     cached_result = json.load(f)

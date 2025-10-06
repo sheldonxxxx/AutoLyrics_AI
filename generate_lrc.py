@@ -1,7 +1,25 @@
 #!/usr/bin/env python3
 """
-Script to generate LRC format lyrics by combining downloaded lyrics and ASR output
-using an OpenAI-compatible API with a custom base URL.
+Generate synchronized LRC files by combining lyrics with ASR transcript timestamps.
+
+This module is the core of the Music Lyrics Processing Pipeline, responsible for
+creating synchronized LRC (Lyrics) files using AI-powered alignment.
+For comprehensive documentation, see: docs/modules/generate_lrc.md
+
+Key Features:
+- Intelligent lyrics-to-timing alignment using LLM
+- Dual input support (with/without reference lyrics)
+- Grammar correction for ASR transcripts
+- Proper LRC format compliance ([mm:ss.xx] timestamps)
+
+Dependencies:
+- openai (API client library)
+- logging_config (pipeline logging)
+- utils (file I/O and validation)
+
+LRC Format: [mm:ss.xx]Lyrics content with precise timing
+
+Pipeline Stage: 5/6 (LRC Generation)
 """
 
 import os

@@ -1,6 +1,27 @@
 #!/usr/bin/env python3
 """
-Configuration module for consistent logging across all scripts.
+Centralized logging configuration for the Music Lyrics Processing Pipeline.
+
+This module provides consistent logging setup with colored output and file logging
+capabilities across all pipeline modules.
+For comprehensive documentation, see: docs/modules/logging_config.md
+
+Key Features:
+- Colored console output with ANSI color codes
+- File logging with persistent storage
+- Hierarchical logger configuration
+- Terminal compatibility and smart color detection
+- Flexible log level and format configuration
+
+Dependencies:
+- logging (Python standard library)
+- sys (system interface)
+- pathlib (modern path handling)
+- os (operating system interface)
+
+Logger Colors: DEBUG(Cyan), INFO(Green), WARNING(Yellow), ERROR(Red), CRITICAL(Magenta)
+
+Used By: All pipeline modules for consistent logging
 """
 
 import logging

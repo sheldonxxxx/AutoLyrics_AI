@@ -2,18 +2,88 @@
 
 ## General Documentation Principles
 
+### Documentation Architecture
+The Music Lyrics Processing Pipeline uses a **centralized documentation architecture** optimized for AI maintenance:
+
 ### Documentation Types
-- **Module docstrings**: Provide at the top of each Python file
+- **Module docstrings**: Minimal reference-style docstrings in code files
+- **Centralized documentation**: Comprehensive markdown files in `docs/modules/`
 - **Function docstrings**: Required for all public functions
 - **Class docstrings**: Required for all classes
 - **Inline comments**: Use sparingly for complex logic only
 - **README files**: Keep project overview current and comprehensive
+
+### Documentation Structure
+```
+docs/
+├── README.md (main project documentation)
+├── modules/ (individual module documentation)
+│   ├── module_name.md (comprehensive module docs)
+│   └── ...
+└── guides/ (development and troubleshooting guides)
+```
+
+### Code Documentation Approach
+- **Reference-Style Docstrings**: Clean, minimal docstrings (~50 lines)
+- **External Documentation**: Comprehensive docs in `docs/modules/`
+- **Cross-References**: Links between code and detailed documentation
+- **AI-Optimized**: Efficient for automated maintenance
 
 ### Documentation Language
 - Use clear, professional English
 - Write in imperative mood ("Extract", not "Extracts")
 - Be concise but comprehensive
 - Use complete sentences with proper punctuation
+
+### Reference-Style Docstrings
+For code files, use minimal reference-style docstrings that point to external documentation:
+
+```python
+#!/usr/bin/env python3
+"""
+Extract song metadata from audio files.
+
+This module handles metadata extraction for the Music Lyrics Processing Pipeline.
+For comprehensive documentation, see: docs/modules/extract_metadata.md
+
+Key Features:
+- Multiple audio format support (FLAC, MP3, M4A, etc.)
+- Intelligent tag priority system
+- Filename fallback for missing metadata
+- Comprehensive error handling
+
+Dependencies:
+- mutagen>=1.47.0
+- logging_config (pipeline logging)
+
+Pipeline Stage: 1/6 (Metadata Extraction)
+"""
+```
+
+### External Documentation
+Comprehensive documentation is maintained in `docs/modules/` markdown files:
+
+```markdown
+# Module Name
+
+## Overview
+Complete module overview with architecture and functionality.
+
+## Pipeline Integration
+How the module fits into the overall pipeline.
+
+## Technical Implementation
+Detailed technical implementation and dependencies.
+
+## Usage Examples
+CLI, programmatic, and pipeline integration examples.
+
+## API Reference
+Complete function and class documentation.
+
+## Troubleshooting
+Common issues and solutions.
+```
 
 ## Module Documentation
 
@@ -214,3 +284,10 @@ Example usage:
 - Regular review and updates
 - Clear separation between user-facing and internal documentation
 - Appropriate level of detail for the audience
+
+### Documentation Workflow for AI Maintenance
+1. **Code Editing**: Work with clean, focused files
+2. **Documentation Reference**: Access comprehensive docs when needed
+3. **Consistency Maintenance**: Keep minimal docstrings in sync with detailed docs
+4. **Cross-Reference Updates**: Update links between code and documentation
+5. **Quality Assurance**: Regular review of documentation accuracy

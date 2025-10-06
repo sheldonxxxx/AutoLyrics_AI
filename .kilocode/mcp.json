@@ -32,16 +32,6 @@
       "alwaysAllow": [
         "puppeteer_navigate"
       ]
-    },
-    "playwright": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@playwright/mcp@0.0.38",
-        "--browser=",
-        "--headless=",
-        "--viewport-size="
-      ]
     }
   }
 }

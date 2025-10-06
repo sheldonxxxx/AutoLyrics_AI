@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
 """
-Script to process all audio files (FLAC and MP3) in a folder (recursive) and create LRC files by:
-1. Using UVR to separate vocals
-2. Using ASR to transcribe vocals with timestamps
-3. Searching for lyrics online
-4. Applying grammatical correction to ASR transcript (if no lyrics found)
-5. Generating LRC files with synchronized timestamps
-6. Adding translation to Traditional Chinese
+Process all audio files in a directory through the complete lyrics pipeline.
 
-This script orchestrates the full workflow in a single command.
+This module is the flagship component of the Music Lyrics Processing Pipeline,
+providing comprehensive batch processing capabilities for entire music libraries.
+For comprehensive documentation, see: docs/modules/process_lyrics.md
+
+Key Features:
+- Complete six-stage pipeline orchestration
+- Recursive file discovery and processing
+- Resume functionality for interrupted batches
+- Comprehensive CSV reporting and progress tracking
+
+Dependencies:
+- All pipeline modules (extract_metadata, separate_vocals, etc.)
+- logging_config (centralized logging)
+- utils (file operations and validation)
+
+Pipeline Stages: 1-6 (Complete workflow orchestration)
+
+Processing: Sequential per file, parallel across pipeline stages
 """
 
 import os

@@ -3,73 +3,39 @@
 ## Core Technologies
 
 ### Python 3.13+
-The project is built on Python 3.13+ as specified in the pyproject.toml, providing access to the latest language features and performance improvements.
+Modern Python version providing latest language features and performance improvements.
 
 ### Audio Processing Libraries
-- **audio-separator**: Used for vocal separation using UVR models
-  - CPU-based processing for compatibility
-  - Uses UVR_MDXNET_Main model by default
-  - Handles multiple audio formats (FLAC, MP3, etc.)
-
-- **faster-whisper**: Used for ASR (Automatic Speech Recognition) transcription
-  - Provides timestamped transcription with word-level accuracy
- - CPU-compatible models for broad accessibility
- - Supports various model sizes (large-v3-turbo, etc.)
+- **audio-separator**: Vocal separation using UVR models (CPU-based)
+- **faster-whisper**: ASR transcription with word-level timestamps (CPU-compatible)
 
 ### Metadata Extraction
-- **mutagen**: Used for extracting metadata from audio files
-  - Supports multiple formats (FLAC, MP3, ID3, etc.)
-  - Handles various tag formats and structures
-  - Provides fallback to filename parsing when tags are missing
+- **mutagen**: Audio metadata extraction with multiple format support
 
 ### Web Scraping
-- **requests**: Used for HTTP requests to lyric websites
-- **beautifulsoup4**: Used for parsing HTML content from lyric websites
-  - Specifically targets uta-net.com for Japanese lyrics
-  - Handles various page structures and content formats
+- **requests**: HTTP requests to lyric websites
+- **beautifulsoup4**: HTML parsing for lyric extraction from uta-net.com
 
 ### API Integration
-- **OpenAI-compatible client**: Used for LRC generation and translation
-  - Supports custom base URLs for alternative providers
-  - Environment variable configuration for API keys and endpoints
-  - Handles Qwen models specifically (Qwen/Qwen3-235B-A22B-Instruct-2507)
-
-### Environment Management
-- **python-dotenv**: Used for environment variable management
-- **uv**: Package manager for Python dependencies
-
-## Development Tools and Practices
+- **OpenAI-compatible client**: LRC generation and translation
+- **python-dotenv**: Environment variable management
 
 ### Package Management
-- **uv**: Modern Python package manager used for dependency management
-- **pyproject.toml**: Standard Python project configuration file
-- **uv.lock**: Lock file for reproducible builds
+- **uv**: Modern Python package manager for dependency management
+
+## Development Tools and Practices
 
 ### Running Python Code
 - **Always use `uv run` to execute Python scripts** instead of direct `python` or `python3` commands
 - This ensures the correct virtual environment and dependencies are used
-- Examples:
-  - `uv run python script.py` - Run a Python script
-  - `uv run python -m py_compile file.py` - Compile Python files for syntax checking
-  - `uv run python -c "import module"` - Test module imports
 
 ### Logging Framework
 - **logging module**: Built-in Python logging with centralized configuration
 - **logging_config.py**: Centralized logging setup across all modules
- - UTF-8 encoding for international characters
- - Consistent formatting across components
-  - Support for both console and file output
-
-### Command-Line Interface
-- **argparse**: Standard Python library for command-line argument parsing
-- **Multiple entry points**: Individual scripts and main orchestrator
 
 ### File Path Management
 - **pathlib**: Modern Python path handling with Path objects
 - **utils.py**: Centralized utility functions for file operations
-  - Recursive file discovery
-  - Output path generation
-  - Directory creation utilities
 
 ## Technical Constraints
 
@@ -98,9 +64,6 @@ The project is built on Python 3.13+ as specified in the pyproject.toml, providi
 - openai>=2.0.1
 - python-dotenv>=1.1.1
 - requests>=2.32.5
-
-### Development Dependencies
-- uv (package manager)
 
 ## Configuration Management
 

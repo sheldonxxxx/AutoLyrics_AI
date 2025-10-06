@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
 """
-Script to verify if downloaded lyrics match ASR transcript content using LLM.
+Verify downloaded lyrics match ASR transcript content using LLM analysis.
+
+This module provides quality assurance for the Music Lyrics Processing Pipeline.
+For comprehensive documentation, see: docs/modules/verify_lyrics.md
+
+Key Features:
+- LLM-powered content verification with automatic retry on format mismatches
+- Built-in output validation using pydantic-ai output validators
+- Confidence scoring and quality gates
+- Detailed verification reporting
+
+Dependencies:
+- pydantic_ai (structured LLM interactions with retry support)
+- openai (API client library)
+- logging_config (pipeline logging)
+
+Verification Thresholds: ≥0.6 confidence for acceptance
+
+Pipeline Stage: 5/6 (Quality Verification)
 """
 
 import os
@@ -10,7 +28,7 @@ from typing import Dict, Optional, Tuple
 from pathlib import Path
 from pydantic import BaseModel, Field
 
-from pydantic_ai import Agent
+from pydantic_ai import Agent, ModelRetry
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from dotenv import load_dotenv
@@ -25,9 +43,25 @@ class LyricsVerification(BaseModel):
     match: bool = Field(description="Whether the lyrics match the ASR transcript")
     confidence: float = Field(description="Confidence score between 0.0 and 1.0")
     reasoning: str = Field(description="Explanation of the verification decision")
-    similarity_score: float = Field(description="Similarity score between 0.0 and 1.0")
-    key_matches: list[str] = Field(description="List of matching elements found")
-    discrepancies: list[str] = Field(description="List of major differences identified")
+
+
+def validate_lyrics_verification(output: LyricsVerification) -> LyricsVerification:
+    """
+    Output validator for lyrics verification results.
+
+    Validates that the LyricsVerification object has valid structure and values.
+    Raises ModelRetry if validation fails to trigger automatic retry.
+    """
+
+    # Validate required fields
+    if not output.reasoning or not output.reasoning.strip():
+        raise ModelRetry("Missing or empty reasoning in verification result")
+
+    # Validate confidence score range
+    if not (0.0 <= output.confidence <= 1.0):
+        raise ModelRetry(f"Invalid confidence score: {output.confidence}. Must be between 0.0 and 1.0")
+
+    return output
 
 
 class LyricsVerifier:
@@ -52,11 +86,14 @@ class LyricsVerifier:
             provider=openai_provider
         )
 
-        # Create Pydantic AI agent with the model
+        # Create Pydantic AI agent with the model and output validator
         self.agent = Agent(
             openai_model,
             output_type=LyricsVerification
         )
+
+        # Apply the output validator for automatic retry on format mismatches
+        self.agent.output_validator(validate_lyrics_verification)
 
     def verify_lyrics_match(self, lyrics_text: str, asr_transcript: str) -> Optional[LyricsVerification]:
         """
@@ -97,42 +134,23 @@ class LyricsVerifier:
             )
 
             # Use Pydantic AI agent to run the verification
+            # Output validator will automatically retry on format mismatches
             logger.info("Running lyrics verification with LLM")
             result = self.agent.run_sync(user_prompt)
 
-            # Validate the result
-            if not result or not result.output:
-                logger.error("No result returned from lyrics verification")
-                return None
-
-            if not isinstance(result.output, LyricsVerification):
-                logger.error(f"Invalid result type: {type(result.output)}")
-                return None
-
+            # Result is guaranteed to be valid due to output validator
             verification_result = result.output
-
-            # Validate required fields
-            if not verification_result.reasoning:
-                logger.warning("Missing reasoning in verification result")
-                return None
-
-            # Validate confidence and similarity scores
-            if not (0.0 <= verification_result.confidence <= 1.0):
-                logger.warning(f"Invalid confidence score: {verification_result.confidence}")
-                return None
-
-            if not (0.0 <= verification_result.similarity_score <= 1.0):
-                logger.warning(f"Invalid similarity score: {verification_result.similarity_score}")
-                return None
 
             logger.info(
                 f"Lyrics verification completed: match={verification_result.match}, "
-                f"confidence={verification_result.confidence:.2f}, "
-                f"similarity={verification_result.similarity_score:.2f}"
+                f"confidence={verification_result.confidence:.2f}"
             )
 
             return verification_result
 
+        except ModelRetry as e:
+            logger.error(f"Lyrics verification failed after retries: {e}")
+            return None
         except Exception as e:
             logger.error(f"Error during lyrics verification: {e}", exc_info=True)
             return None

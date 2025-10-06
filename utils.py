@@ -1,6 +1,25 @@
 #!/usr/bin/env python3
 """
-Utility functions for the music lyric processing pipeline.
+Shared utility functions for the Music Lyrics Processing Pipeline.
+
+This module provides essential utility functions used throughout the pipeline
+for file operations, path management, data validation, and configuration.
+For comprehensive documentation, see: docs/modules/utils.md
+
+Core Functionality Areas:
+- File System Operations (discovery, path management, I/O)
+- Data Processing (parsing, conversion, validation)
+- Configuration Management (environment variables, API settings)
+- Output Management (CSV generation, directory handling)
+- Content Processing (LRC/transcript manipulation)
+
+Dependencies:
+- pathlib (modern path handling)
+- typing (type hints)
+- logging_config (pipeline logging)
+- csv (CSV file generation)
+
+Used By: All pipeline modules for shared functionality
 """
 
 from pathlib import Path

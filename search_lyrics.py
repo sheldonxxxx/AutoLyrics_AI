@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
 """
-Script to search for lyrics on uta-net.com using song name and artist.
+Search for lyrics on uta-net.com using song title and artist name.
+
+This module handles web scraping for the Music Lyrics Processing Pipeline.
+For comprehensive documentation, see: docs/modules/search_lyrics.md
+
+Key Features:
+- Dual search strategy (title → artist fallback)
+- Polite web scraping with rate limiting
+- Intelligent song matching algorithm
+- Proper Japanese text formatting and encoding
+
+Dependencies:
+- requests>=2.32.5 (HTTP web scraping)
+- beautifulsoup4>=4.14.2 (HTML parsing)
+- logging_config (pipeline logging)
+
+Target Site: uta-net.com (Japan's largest lyrics database)
+
+Pipeline Stage: 4/6 (Lyrics Search)
 """
 
 import requests

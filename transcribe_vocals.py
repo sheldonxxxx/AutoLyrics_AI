@@ -1,7 +1,23 @@
 #!/usr/bin/env python3
 """
-Script to transcribe vocals with timestamped transcription using faster-whisper.
-Separated from separate_vocals.py for better modularity.
+Transcribe vocals with timestamped transcription using faster-whisper.
+
+This module handles ASR transcription for the Music Lyrics Processing Pipeline.
+For comprehensive documentation, see: docs/modules/transcribe_vocals.md
+
+Key Features:
+- Multiple Whisper model sizes (tiny to large-v3)
+- Word-level timestamp accuracy
+- CPU-compatible processing
+- Configurable accuracy vs. speed trade-offs
+
+Dependencies:
+- faster-whisper>=1.2.0 (optimized Whisper implementation)
+- logging_config (pipeline logging)
+
+Model Sizes: tiny, base, small, medium, large-v1/v2/v3, large-v3-turbo
+
+Pipeline Stage: 3/6 (ASR Transcription)
 """
 
 import os

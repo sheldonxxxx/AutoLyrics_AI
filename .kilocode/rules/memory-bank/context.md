@@ -2,28 +2,27 @@
 
 ## Current State
 
-The Music Lyrics Processing Pipeline is a mature Python-based system that successfully processes music files to extract lyrics, separate vocals, and generate synchronized LRC format lyrics with translation capabilities. The project is well-structured with a modular architecture that allows for both individual component execution and full pipeline processing.
+Mature Python-based system for processing music files to generate synchronized LRC format lyrics with translation. Well-structured modular architecture supporting both individual components and full pipeline processing.
 
 ## Active Development Focus
 
-The system is currently focused on processing Japanese music files, with lyrics sourced from uta-net.com. The pipeline effectively combines AI technologies for vocal separation, ASR transcription, and LLM-based alignment to create time-synchronized lyrics.
+Processing music files with lyrics from uta-net.com. Pipeline combines AI technologies for vocal separation, ASR transcription, and LLM-based alignment.
 
 ## Recent Changes
 
-- Implementation of a comprehensive batch processing script (`process_lyrics.py`) that orchestrates the entire workflow
-- Integration with OpenAI-compatible APIs for LRC generation and translation
-- Support for bilingual LRC files (original + Traditional Chinese translation)
-- Checkpoint-based processing to skip completed steps when possible
-- **Separated UVR and ASR functionality** into distinct modules (`separate_vocals.py` and `transcribe_vocals.py`) for better modularity
-- **Implemented song-specific folder structure** - all intermediate files for each song are now organized in `tmp/{relative_path}/{filename}/` folders
-- Enhanced vocal separation with custom output path support and automatic cleanup of instrumental files
-- **NEW: LLM-based lyrics verification system** - verifies downloaded lyrics match ASR content before proceeding to LRC generation
-- **NEW: Enhanced song identification with retry mechanism** - up to 3 attempts with feedback to avoid incorrect lyrics
-- **NEW: Quality assurance workflow** - only processes to LRC generation if lyrics verification passes (≥60% confidence threshold)
+- Comprehensive batch processing script (`process_lyrics.py`)
+- OpenAI API integration for LRC generation and translation
+- Bilingual LRC support (original + Traditional Chinese)
+- Separated UVR/ASR into distinct modules for better modularity
+- Song-specific folder structure in `tmp/{relative_path}/{filename}/`
+- **NEW: LLM-based lyrics verification system**
+- **NEW: Enhanced song identification with retry mechanism**
+- **NEW: Quality assurance workflow** (≥60% confidence threshold)
+- **NEW: Centralized documentation architecture**
 
 ## Next Steps
 
-- Potential expansion to support additional lyric sources beyond uta-net.com
-- Performance optimization for processing large music libraries
-- Possible addition of more translation languages beyond Traditional Chinese
-- Enhancement of the LRC synchronization accuracy through improved AI prompting
+- Expand lyric sources beyond uta-net.com
+- Optimize performance for large music libraries
+- Add more translation languages
+- Improve LRC synchronization accuracy

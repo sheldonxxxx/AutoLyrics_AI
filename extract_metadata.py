@@ -1,6 +1,21 @@
 #!/usr/bin/env python3
 """
-Script to extract song name and artist name from audio file metadata.
+Extract song metadata from audio files.
+
+This module handles metadata extraction for the Music Lyrics Processing Pipeline.
+For comprehensive documentation, see: docs/modules/extract_metadata.md
+
+Key Features:
+- Multiple audio format support (FLAC, MP3, M4A, etc.)
+- Intelligent tag priority system
+- Filename fallback for missing metadata
+- Comprehensive error handling
+
+Dependencies:
+- mutagen>=1.47.0
+- logging_config (pipeline logging)
+
+Pipeline Stage: 1/6 (Metadata Extraction)
 """
 
 import os
