@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from types import SimpleNamespace
 import os
+import re
 
 from logging_config import get_logger
 
@@ -45,7 +46,7 @@ def find_audio_files(input_dir: str) -> List[Path]:
     """
     input_path = Path(input_dir)
     if not input_path.exists():
-        logger.error(f"Input directory does not exist: {input_dir}")
+        logger.exception(f"Input directory does not exist: {input_dir}")
         return []
 
     # Find both FLAC and MP3 files
@@ -70,7 +71,7 @@ def find_flac_files(input_dir: str) -> List[Path]:
     """
     input_path = Path(input_dir)
     if not input_path.exists():
-        logger.error(f"Input directory does not exist: {input_dir}")
+        logger.exception(f"Input directory does not exist: {input_dir}")
         return []
 
     flac_files = list(input_path.rglob("*.flac"))
@@ -125,9 +126,10 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
         song_folder.mkdir(parents=True, exist_ok=True)
 
     return {
-        'vocals_wav': song_folder / f"{filename_stem}_(Vocals)_UVR_MDXNET_Main.wav",
-        'transcript_txt': song_folder / f"{filename_stem}_(Vocals)_UVR_MDXNET_Main_transcript.txt",
-        'corrected_transcript_txt': song_folder / f"{filename_stem}_(Vocals)_UVR_MDXNET_Main_corrected_transcript.txt",
+        'vocals_wav': song_folder / f"{filename_stem}_vocal.wav",
+        'transcript_txt': song_folder / f"{filename_stem}_transcript.txt",
+        'corrected_transcript_txt': song_folder / f"{filename_stem}_corrected_transcript.txt",
+        'song_identification': song_folder / f"{filename_stem}_song_identification.json",
         'lyrics_txt': song_folder / f"{filename_stem}_lyrics.txt",
         'lrc': song_folder / f"{filename_stem}.lrc",
         'translated_lrc': nested_output_path / f"{filename_stem}.lrc"
@@ -148,7 +150,7 @@ def ensure_output_directory(output_dir: str) -> bool:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         return True
     except Exception as e:
-        logger.error(f"Failed to create output directory {output_dir}: {e}")
+        logger.exception(f"Failed to create output directory {output_dir}: {e}")
         return False
 
 
@@ -166,7 +168,7 @@ def load_prompt_template(prompt_file_path: str) -> str | None:
         with open(prompt_file_path, 'r', encoding='utf-8') as f:
             return f.read()
     except Exception as e:
-        logger.error(f"Error loading prompt template from {prompt_file_path}: {e}")
+        logger.exception(f"Error loading prompt template from {prompt_file_path}: {e}")
         return None
 
 
@@ -227,7 +229,7 @@ def validate_lrc_content(content: str) -> bool:
 
     # Check if we have at least one line
     if not lines or not lines[0].strip():
-        logger.error("LRC content is empty")
+        logger.exception("LRC content is empty")
         return False
 
     # Check for proper LRC timestamp format in at least some lines
@@ -302,6 +304,37 @@ def parse_transcript_segments(transcript_content: str) -> List[SimpleNamespace]:
             segments.append(segment)
 
     return segments
+
+
+def remove_timestamps_from_transcript(transcript: str) -> str:
+    """
+    Remove timestamps from ASR transcript to reduce token usage.
+
+    Args:
+        transcript (str): ASR transcript with timestamps
+
+    Returns:
+        str: Transcript with timestamps removed
+    """
+    if not transcript:
+        return transcript
+
+    # Remove common timestamp patterns:
+    # [00:00.00] format, [00:00] format, (00:00.00) format, (00:00) format
+    # Also handle formats like 00:00.00 - Word or 00:00 - Word
+    patterns = [
+        r'\[.*?\]',  # Match anything contained within square brackets
+    ]
+
+    cleaned_transcript = transcript
+    for pattern in patterns:
+        cleaned_transcript = re.sub(pattern, '', cleaned_transcript, flags=re.MULTILINE)
+
+    # Remove extra whitespace and normalize
+    cleaned_transcript = re.sub(r'\s+', ' ', cleaned_transcript).strip()
+
+    logger.debug(f"Removed timestamps from transcript: {len(transcript)} -> {len(cleaned_transcript)} characters")
+    return cleaned_transcript
 
 
 def should_skip_file(paths: dict, resume: bool) -> bool:
@@ -438,7 +471,7 @@ def write_csv_results(csv_file_path: str, results: list) -> bool:
         return True
 
     except Exception as e:
-        logger.error(f"Failed to write CSV results to {csv_file_path}: {e}")
+        logger.exception(f"Failed to write CSV results to {csv_file_path}: {e}")
         return False
 
 

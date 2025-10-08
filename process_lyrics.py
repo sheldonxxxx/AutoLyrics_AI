@@ -25,6 +25,7 @@ Processing: Sequential per file, parallel across pipeline stages
 import os
 import sys
 import re
+import asyncio
 from pathlib import Path
 import logging
 import argparse
@@ -36,13 +37,11 @@ from typing import Dict, List, Optional, Tuple
 
 from logging_config import setup_logging, get_logger
 from extract_metadata import extract_metadata
-from search_lyrics import search_uta_net
 from separate_vocals import separate_vocals
 from transcribe_vocals import transcribe_with_timestamps
 from generate_lrc import read_lyrics_file, read_transcript_file, generate_lrc_lyrics, correct_grammar_in_transcript
 from translate_lrc import main as translate_main
-from identify_song import identify_song_from_asr, identify_song_from_asr_with_retry
-from verify_lyrics import verify_lyrics_match
+from identify_song import identify_song_from_asr_with_retry
 from openai import OpenAI
 from dotenv import load_dotenv
 from utils import (
@@ -88,8 +87,6 @@ class ProcessingResults:
         self.lyrics_length = 0
         self.lyrics_line_count = 0
 
-        self.grammatical_correction_success = False
-        self.grammatical_correction_applied = False
 
         self.lrc_generation_success = False
         self.lrc_line_count = 0
@@ -127,8 +124,6 @@ class ProcessingResults:
             'lyrics_source': self.lyrics_source,
             'lyrics_length': self.lyrics_length,
             'lyrics_line_count': self.lyrics_line_count,
-            'grammatical_correction_success': self.grammatical_correction_success,
-            'grammatical_correction_applied': self.grammatical_correction_applied,
             'lrc_generation_success': self.lrc_generation_success,
             'lrc_line_count': self.lrc_line_count,
             'lrc_has_timestamps': self.lrc_has_timestamps,
@@ -145,9 +140,6 @@ class ProcessingResults:
         end_time = time.time()
         self.processing_end_time = datetime.now().isoformat()
         self.processing_duration_seconds = end_time - self.start_time
-
-
-
 
 def extract_metadata_step(input_file: Path, results: ProcessingResults) -> bool:
     """Step 1: Extract metadata from audio file."""
@@ -171,11 +163,11 @@ def extract_metadata_step(input_file: Path, results: ProcessingResults) -> bool:
     except Exception as e:
         results.metadata_success = False
         results.error_message = f"Metadata extraction failed: {e}"
-        logger.error(f"Failed to extract metadata for {input_file}: {e}")
+        logger.exception(f"Failed to extract metadata for {input_file}: {e}")
         return False
 
 
-def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: ProcessingResults, temp_dir: str = "tmp") -> bool:
+def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: ProcessingResults) -> bool:
     """Step 2: Separate vocals using UVR."""
     vocals_path = paths['vocals_wav']
     
@@ -186,12 +178,11 @@ def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: P
         vocals_file = str(vocals_path)
         results.vocals_separation_success = True
         results.vocals_file_path = vocals_file
-        if Path(vocals_file).exists():
-            results.vocals_file_size = Path(vocals_file).stat().st_size
+        results.vocals_file_size = Path(vocals_file).stat().st_size
         return True
 
     try:
-        vocals_file = separate_vocals(str(input_file), output_dir=temp_dir, vocals_output_path=str(paths['vocals_wav']))
+        vocals_file = separate_vocals(str(input_file), paths['vocals_wav'])
         if vocals_file and Path(vocals_file).exists():
             results.vocals_separation_success = True
             results.vocals_file_path = vocals_file
@@ -201,13 +192,13 @@ def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: P
         else:
             results.vocals_separation_success = False
             results.error_message = "Vocal separation returned no file"
-            logger.error(f"Failed to separate vocals for {input_file}")
+            logger.exception(f"Failed to separate vocals for {input_file}")
             return False
 
     except Exception as e:
         results.vocals_separation_success = False
         results.error_message = f"Vocal separation failed: {e}"
-        logger.error(f"Exception during vocal separation for {input_file}: {e}")
+        logger.exception(f"Exception during vocal separation for {input_file}: {e}")
         return False
 
 
@@ -235,7 +226,6 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
             # Save transcript to file
             transcript_file = str(paths['transcript_txt'])
             with open(transcript_file, 'w', encoding='utf-8') as f:
-                f.write("Timestamped Transcription:\n\n")
                 for segment in segments:
                     f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
             logger.info(f"Transcription completed: {len(segments)} segments, saved to: {transcript_file}")
@@ -243,175 +233,117 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
         else:
             results.transcription_success = False
             results.error_message = "Transcription returned no segments"
-            logger.error(f"Failed to transcribe vocals for {vocals_file}")
+            logger.exception(f"Failed to transcribe vocals for {vocals_file}")
             return None
 
     except Exception as e:
         results.transcription_success = False
         results.error_message = f"Transcription failed: {e}"
-        logger.error(f"Exception during transcription for {vocals_file}: {e}")
+        logger.exception(f"Exception during transcription for {vocals_file}: {e}")
         return None
 
 
-def search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: ProcessingResults, transcript_content: Optional[str] = None) -> Optional[str]:
-    """Step 4: Search for lyrics online with verification against ASR content."""
+def _identify_song_sync(transcript: str, result_file_path: Optional[str] = None, force_recompute: bool = False, max_retries: int = 3, max_search_results: int = 5, use_metadata: bool = False, metadata: Optional[dict] = None) -> Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]:
+    """
+    Synchronous wrapper for the async identify_song_from_asr_with_retry function.
+
+    Args:
+        transcript (str): ASR transcript of the song vocals
+        result_file_path (Optional[str]): Path to save/load identification results
+        force_recompute (bool): If True, skip cache and always perform new identification
+        max_retries (int): Maximum number of retry attempts (default: 3)
+        max_search_results (int): Maximum number of search results to return (default: 5)
+        use_metadata (bool): Whether to use metadata in identification (default: False)
+        metadata (Optional[dict]): Dictionary containing song metadata
+
+    Returns:
+        Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]: (song_title, artist_name, native_language, lyrics_found, lyrics_content, lyrics_source_url) if identified, None otherwise
+    """
+    try:
+        # Create a new event loop for this synchronous call
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(
+                identify_song_from_asr_with_retry(
+                    transcript,
+                    result_file_path,
+                    force_recompute,
+                    max_retries,
+                    max_search_results,
+                    use_metadata,
+                    metadata
+                )
+            )
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.exception(f"Error in synchronous song identification: {e}")
+        return None
+
+
+def identify_and_search_lyrics_step(metadata: dict, paths: dict, resume: bool, results: ProcessingResults, transcript_content: Optional[str] = None) -> Optional[str]:
+    """Step 4: Identify song and search for lyrics using LLM and web search."""
 
     # Check if we have metadata
     has_metadata = metadata['title'] and metadata['artist']
 
-    # If no metadata but we have transcript, try to identify song from ASR with retry
-    if not has_metadata and transcript_content:
-        logger.info("No metadata available, attempting to identify song from ASR transcript...")
+    # Try to identify song and get lyrics using LLM
+    logger.info("Step 4: Identifying song and searching for lyrics using LLM...")
 
-        # Define result file path for song identification caching
-        song_id_result_path = paths['transcript_txt'].with_name(f"{results.filename.replace('.', '_')}_song_identification.json")
-
-        identified_song = identify_song_from_asr_with_retry(transcript_content, str(song_id_result_path), force_recompute=not resume, max_retries=3)
+    try:
+        # Use different approach based on whether we have metadata
+        if has_metadata:
+            logger.info(f"Using metadata + ASR approach for '{metadata['title']}' by {metadata['artist']}")
+            identified_song = _identify_song_sync(
+                transcript_content,
+                paths,
+                force_recompute=not resume,
+                max_retries=3,
+                metadata=metadata
+            )
+        else:
+            logger.info("Using ASR-only approach for song identification")
+            identified_song = _identify_song_sync(
+                transcript_content,
+                paths,
+                force_recompute=not resume,
+                max_retries=3
+            )
 
         if identified_song:
-            song_title, artist_name, native_language = identified_song
-            logger.info(f"Successfully identified song from ASR: '{song_title}' by {artist_name} ({native_language})")
+            song_title, artist_name, native_language, lyrics_found, lyrics_content, lyrics_source_url = identified_song
+            logger.info(f"Successfully identified song: '{song_title}' by {artist_name} ({native_language})")
 
-            # Update metadata with identified information
-            metadata['title'] = song_title
-            metadata['artist'] = artist_name
-            results.metadata_title = song_title
-            results.metadata_artist = artist_name
-            has_metadata = True
-            results.lyrics_source = f'uta-net.com (identified from ASR: {native_language})'
+            # Update metadata with identified information (if not already set)
+            if not has_metadata:
+                metadata['title'] = song_title
+                metadata['artist'] = artist_name
+                results.metadata_title = song_title
+                results.metadata_artist = artist_name
+
+            if lyrics_found and lyrics_content:
+                results.lyrics_search_success = True
+                results.lyrics_source = lyrics_source_url or f'LLM search (identified from ASR: {native_language})'
+                results.lyrics_length = len(lyrics_content)
+                results.lyrics_line_count = len(lyrics_content.split('\n'))
+
+                return lyrics_content
+            else:
+                logger.warning(f"Song identified but no lyrics found for '{song_title}' by {artist_name}")
+                results.lyrics_search_success = False
+                results.lyrics_source = f'LLM search (identified from ASR: {native_language}, no lyrics found)'
+                return None
         else:
             logger.warning("Could not identify song from ASR transcript after 3 attempts")
             results.lyrics_search_success = False
-            return None
-
-    if not has_metadata:
-        logger.info("Skipping lyrics search due to missing title or artist metadata")
-        results.lyrics_search_success = False
-        return None
-
-    lyrics_path = paths['lyrics_txt']
-
-    if resume and lyrics_path.exists():
-        logger.info(f"Lyrics file already exists, skipping lyrics search...")
-        try:
-            with open(lyrics_path, 'r', encoding='utf-8') as f:
-                lyrics_content = f.read()
-            lyrics_content = extract_lyrics_content(lyrics_content)
-            results.lyrics_search_success = True
-            results.lyrics_source = 'uta-net.com (cached)'
-            results.lyrics_length = len(lyrics_content)
-            results.lyrics_line_count = len(lyrics_content.split('\n')) if lyrics_content else 0
-            return lyrics_content
-        except Exception as e:
-            results.lyrics_search_success = False
-            results.error_message = f"Failed to read existing lyrics: {e}"
-            logger.error(f"Failed to read existing lyrics: {e}")
-            return None
-
-    logger.info("Step 4: Searching for lyrics...")
-
-    try:
-        lyrics_content = search_uta_net(metadata['title'], metadata['artist'])
-        if lyrics_content:
-            results.lyrics_search_success = True
-            results.lyrics_source = 'uta-net.com'
-            results.lyrics_length = len(lyrics_content)
-            results.lyrics_line_count = len(lyrics_content.split('\n'))
-
-            # Save lyrics to file
-            lyrics_file = str(paths['lyrics_txt'])
-            with open(lyrics_file, 'w', encoding='utf-8') as f:
-                f.write(f"Lyrics for '{metadata['title']}' by {metadata['artist']}\n")
-                f.write("=" * 60 + "\n\n")
-                f.write(lyrics_content)
-                f.write(f"\n\nSource: uta-net.com")
-            logger.info(f"Lyrics found and saved: {results.lyrics_length} chars, {results.lyrics_line_count} lines")
-
-            # Step 4.5: Verify lyrics match ASR content
-            logger.info("Step 4.5: Verifying lyrics match ASR content...")
-            is_match, confidence, reasoning = verify_lyrics_match(lyrics_content, transcript_content)
-
-            if is_match and confidence >= 0.6:  # Require minimum 60% confidence for match
-                logger.info(f"Lyrics verification passed: confidence={confidence:.2f}")
-                results.lyrics_search_success = True
-                return lyrics_content
-            else:
-                logger.warning(f"Lyrics verification failed: confidence={confidence:.2f}, match={is_match}")
-                logger.warning(f"Reasoning: {reasoning}")
-                results.lyrics_search_success = False
-                results.error_message = f"Lyrics verification failed: {reasoning}"
-                return None
-
-        else:
-            results.lyrics_search_success = False
-            logger.warning(f"Could not find lyrics for '{metadata['title']}' by {metadata['artist']}")
+            results.error_message = "Song identification failed"
             return None
 
     except Exception as e:
         results.lyrics_search_success = False
-        results.error_message = f"Lyrics search failed: {e}"
-        logger.error(f"Exception during lyrics search: {e}")
-        return None
-
-
-def grammatical_correction_step(paths: dict, resume: bool, results: ProcessingResults) -> Optional[str]:
-    """Step 4.5: Apply grammatical correction to ASR transcript if no lyrics found."""
-
-    corrected_transcript_path = paths['corrected_transcript_txt']
-
-    # Check for existing corrected transcript file when resuming
-    if resume and corrected_transcript_path.exists():
-        logger.info("Corrected transcript file already exists, skipping grammatical correction...")
-        try:
-            corrected_content = read_transcript_file(str(corrected_transcript_path))
-            results.grammatical_correction_success = True
-            results.grammatical_correction_applied = True  # Assume it was applied if file exists
-            return corrected_content
-        except Exception as e:
-            results.grammatical_correction_success = False
-            results.error_message = f"Failed to read existing corrected transcript: {e}"
-            logger.error(f"Failed to read existing corrected transcript: {e}")
-            return None
-
-    logger.info("Step 4.5: Applying grammatical correction to ASR transcript...")
-
-    try:
-        # Initialize OpenAI client for grammatical correction
-        load_dotenv()
-        config = get_openai_config()
-
-        client = OpenAI(base_url=config["OPENAI_BASE_URL"], api_key=config["OPENAI_API_KEY"])
-
-        # Read the ASR transcript for correction
-        transcript_path = str(paths['transcript_txt'])
-        asr_transcript = read_transcript_file(transcript_path)
-
-        # Apply grammatical correction
-        corrected_transcript = correct_grammar_in_transcript(client, asr_transcript, results.filename, config["OPENAI_MODEL"])
-
-        if corrected_transcript and corrected_transcript != asr_transcript:
-            results.grammatical_correction_success = True
-            results.grammatical_correction_applied = True
-
-            # Save corrected transcript to file for debugging and resume
-            corrected_file = str(corrected_transcript_path)
-            with open(corrected_file, 'w', encoding='utf-8') as f:
-                f.write("Grammatically Corrected Transcription:\n\n")
-                f.write(corrected_transcript)
-                f.write(f"\n\nSource: Corrected from ASR transcript")
-
-            logger.info(f"Grammatical correction applied successfully and saved to: {corrected_file}")
-            return corrected_transcript
-        else:
-            results.grammatical_correction_success = True
-            results.grammatical_correction_applied = False
-            logger.info("No grammatical corrections needed or correction failed")
-            return None
-
-    except Exception as e:
-        results.grammatical_correction_success = False
-        results.error_message = f"Grammatical correction failed: {e}"
-        logger.error(f"Exception during grammatical correction: {e}")
+        results.error_message = f"Song identification and lyrics search failed: {e}"
+        logger.exception(f"Exception during song identification and lyrics search: {e}")
         return None
 
 def generate_lrc_step(lyrics_content: Optional[str], corrected_transcript_content: Optional[str], transcript_path: str, paths: dict, resume: bool, results: ProcessingResults) -> bool:
@@ -460,7 +392,7 @@ def generate_lrc_step(lyrics_content: Optional[str], corrected_transcript_conten
         else:
             results.lrc_generation_success = False
             results.error_message = "LRC generation returned no content"
-            logger.error("Failed to generate LRC")
+            logger.exception("Failed to generate LRC")
             return False
 
     return True
@@ -473,6 +405,7 @@ def translate_lrc_step(lrc_path: str, paths: dict, resume: bool, log_level: int,
     logger.info("Step 6: Adding translation to Traditional Chinese...")
 
     if resume and translated_lrc_path.exists():
+        results.overall_success = True
         logger.info(f"Translated LRC file already exists, skipping translation...")
         return True
     
@@ -485,7 +418,7 @@ def translate_lrc_step(lrc_path: str, paths: dict, resume: bool, log_level: int,
     else:
         results.translation_success = False
         results.error_message = "Translation failed"
-        logger.error("Translation failed")
+        logger.exception("Translation failed")
 
     return success
 
@@ -520,9 +453,6 @@ def process_single_audio_file(
     # Get output file paths (preserving nested folder structure)
     paths = get_output_paths(input_file, output_dir, temp_dir, input_dir)
 
-    # Create temp directory if it doesn't exist
-    Path(temp_dir).mkdir(parents=True, exist_ok=True)
-
     # Check if all outputs already exist and skip if requested
     # if should_skip_file(paths, resume):
     #     logger.info(f"All output files already exist for {input_file}, skipping...")
@@ -536,7 +466,7 @@ def process_single_audio_file(
             return False, results.to_dict()
 
         # Step 2: Separate vocals using UVR
-        if not separate_vocals_step(input_file, paths, resume, results, temp_dir):
+        if not separate_vocals_step(input_file, paths, resume, results):
             results.finalize()
             return False, results.to_dict()
 
@@ -552,10 +482,10 @@ def process_single_audio_file(
         try:
             transcript_content = read_transcript_file(transcript_path)
         except Exception as e:
-            logger.warning(f"Could not read transcript file for song identification: {e}")
+            logger.warning(f"Could not read transcript file for song identification: {e}", exc_info=True)
 
-        # Step 4: Search for lyrics
-        lyrics_content = search_lyrics_step(
+        # Step 4: Identify song and search for lyrics using LLM
+        lyrics_content, _ = identify_and_search_lyrics_step(
             {
                 'title': results.metadata_title,
                 'artist': results.metadata_artist,
@@ -570,14 +500,9 @@ def process_single_audio_file(
             transcript_content
         )
 
-        # Step 4.5: Apply grammatical correction if lyrics not found
-        corrected_transcript_content = None
-        if not lyrics_content:
-            corrected_transcript_content = grammatical_correction_step(paths, resume, results)
-
         # Step 5: Generate LRC file
         transcript_path = str(paths['transcript_txt'])
-        if not generate_lrc_step(lyrics_content, corrected_transcript_content, transcript_path, paths, resume, results):
+        if not generate_lrc_step(lyrics_content, None, transcript_path, paths, resume, results):
             results.finalize()
             return False, results.to_dict()
 
@@ -594,7 +519,7 @@ def process_single_audio_file(
         results.error_message = str(e)
         results.overall_success = False
         results.finalize()
-        logger.error(f"Error processing file {input_file}: {e}")
+        logger.exception(f"Error processing file {input_file}: {e}")
         return False, results.to_dict()
             
 
@@ -647,13 +572,13 @@ def main():
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
     use_colors = not args.no_color
-    setup_logging(level=log_level, use_colors=use_colors)
+    setup_logging(level=log_level, use_colors=use_colors, enable_logfire=True)
     
     logger.info(f"Starting audio file lyric processing for directory: {args.input_dir}")
     
     # Ensure output directory exists
     if not ensure_output_directory(args.output_dir):
-        logger.error("Failed to create output directory, exiting...")
+        logger.exception("Failed to create output directory, exiting...")
         return 1
     
     # Create temporary directory
@@ -678,7 +603,7 @@ def main():
         if success:
             success_count += 1
         else:
-            logger.error(f"Failed to process {audio_file}")
+            logger.exception(f"Failed to process {audio_file}")
 
     logger.info(f"Processing completed. Successfully processed {success_count}/{len(audio_files)} files.")
 
@@ -687,7 +612,7 @@ def main():
     if write_csv_results(args.csv_output, all_results):
         logger.info(f"CSV file saved successfully with {len(all_results)} records")
     else:
-        logger.error("Failed to write CSV file")
+        logger.exception("Failed to write CSV file")
     
     return 0 if success_count == len(audio_files) else 1
 

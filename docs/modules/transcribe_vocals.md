@@ -229,7 +229,6 @@ segments = transcribe_with_timestamps(vocals_file)
 if segments:
     # Save transcript for LRC generation
     with open(transcript_path, 'w', encoding='utf-8') as f:
-        f.write("Timestamped Transcription:\n\n")
         for segment in segments:
             f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
 

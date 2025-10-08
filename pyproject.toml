@@ -10,6 +10,7 @@ dependencies = [
     "ddgs>=9.6.0",
     "duckduckgo-search>=8.1.1",
     "faster-whisper>=1.2.0",
+    "logfire>=4.11.0",
     "mutagen>=1.47.0",
     "openai>=2.0.1",
     "pydantic>=2.0.0",

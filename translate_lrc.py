@@ -55,13 +55,13 @@ def translate_lrc_content(client, lrc_content, target_language="Traditional Chin
         return None
 
     if model is None:
-        logger.error("Model parameter is required")
+        logger.exception("Model parameter is required")
         return None
 
     # Get the appropriate prompt file for the target language
     prompt_file_name = get_prompt_file_for_language(target_language)
     if not prompt_file_name:
-        logger.error(f"No prompt file configured for language: {target_language}")
+        logger.exception(f"No prompt file configured for language: {target_language}")
         return None
 
     # Load prompt template from file
@@ -69,7 +69,7 @@ def translate_lrc_content(client, lrc_content, target_language="Traditional Chin
     prompt_template = load_prompt_template(prompt_template_path)
 
     if not prompt_template:
-        logger.error(f"Failed to load prompt template: {prompt_file_name}")
+        logger.exception(f"Failed to load prompt template: {prompt_file_name}")
         return None
 
     # Format the prompt with actual data
@@ -92,13 +92,13 @@ def translate_lrc_content(client, lrc_content, target_language="Traditional Chin
         return response.choices[0].message.content.strip()
     
     except Exception as e:
-        logger.error(f"Error translating LRC content: {e}")
+        logger.exception(f"Error translating LRC content: {e}")
         return None
 
 
 def main(input_path, output_path, target_language="Traditional Chinese", log_level=logging.INFO):
     # Set up logging with specified level
-    setup_logging(level=log_level)
+    setup_logging(level=log_level, enable_logfire=True)
     
     # Get translation configuration using utility function
     config = get_translation_config()
@@ -114,7 +114,7 @@ def main(input_path, output_path, target_language="Traditional Chinese", log_lev
     
     # Check if the input file exists
     if not os.path.exists(input_path):
-        logger.error(f"Input LRC file does not exist: {input_path}")
+        logger.exception(f"Input LRC file does not exist: {input_path}")
         return False
     
     logger.info("Reading LRC file...")
@@ -152,7 +152,7 @@ def main(input_path, output_path, target_language="Traditional Chinese", log_lev
         logger.info(f"Bilingual LRC lyrics saved to: {output_path}")
         return True
     else:
-        logger.error("Failed to translate LRC content.")
+        logger.exception("Failed to translate LRC content.")
         return False
 
 

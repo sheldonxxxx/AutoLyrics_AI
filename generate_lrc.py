@@ -54,7 +54,7 @@ def generate_lrc_lyrics(client, lyrics_text, asr_transcript, model=None):
     lrc_transcript = convert_transcript_to_lrc(asr_transcript)
 
     if model is None:
-        logger.error("Model parameter is required")
+        logger.exception("Model parameter is required")
         return None
 
     # Load prompt template from file
@@ -62,7 +62,7 @@ def generate_lrc_lyrics(client, lyrics_text, asr_transcript, model=None):
     prompt_template = load_prompt_template(prompt_template_path)
 
     if not prompt_template:
-        logger.error("Failed to load prompt template")
+        logger.exception("Failed to load prompt template")
         return None
 
     # Format the prompt with actual data
@@ -85,7 +85,7 @@ def generate_lrc_lyrics(client, lyrics_text, asr_transcript, model=None):
         return response.choices[0].message.content.strip()
 
     except Exception as e:
-        logger.error(f"Error generating LRC lyrics: {e}")
+        logger.exception(f"Error generating LRC lyrics: {e}")
         return None
 
 
@@ -102,7 +102,7 @@ def correct_grammar_in_transcript(client, asr_transcript, filename=None, model=N
         str: Grammatically corrected transcript
     """
     if model is None:
-        logger.error("Model parameter is required")
+        logger.exception("Model parameter is required")
         return asr_transcript  # Return original if model not provided
 
     # Load prompt template from file
@@ -110,7 +110,7 @@ def correct_grammar_in_transcript(client, asr_transcript, filename=None, model=N
     prompt_template = load_prompt_template(prompt_template_path)
 
     if not prompt_template:
-        logger.error("Failed to load grammatical correction prompt template")
+        logger.exception("Failed to load grammatical correction prompt template")
         return asr_transcript  # Return original if prompt loading fails
 
     # Format the prompt with actual data
@@ -133,7 +133,7 @@ def correct_grammar_in_transcript(client, asr_transcript, filename=None, model=N
         return corrected_transcript
 
     except Exception as e:
-        logger.error(f"Error correcting grammar in transcript: {e}")
+        logger.exception(f"Error correcting grammar in transcript: {e}")
         return asr_transcript  # Return original if correction fails
 
 def main():
@@ -154,7 +154,7 @@ def main():
     
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level)
+    setup_logging(level=log_level, enable_logfire=True)
     
     # Get OpenAI configuration using utility function
     config = get_openai_config()
@@ -172,11 +172,11 @@ def main():
     
     # Check if the input files exist
     if not os.path.exists(lyrics_file_path):
-        logger.error(f"Lyrics file does not exist: {lyrics_file_path}")
+        logger.exception(f"Lyrics file does not exist: {lyrics_file_path}")
         return
     
     if not os.path.exists(transcript_file_path):
-        logger.error(f"Transcript file does not exist: {transcript_file_path}")
+        logger.exception(f"Transcript file does not exist: {transcript_file_path}")
         return
     
     logger.info("Reading lyrics and transcript files...")
@@ -204,7 +204,7 @@ def main():
         
         logger.info(f"LRC lyrics saved to: {output_lrc_path}")
     else:
-        logger.error("Failed to generate LRC lyrics.")
+        logger.exception("Failed to generate LRC lyrics.")
 
 
 if __name__ == "__main__":

@@ -59,10 +59,10 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         return segment_list
 
     except ImportError:
-        logger.error("faster-whisper is not installed. Please install it with: pip install faster-whisper")
+        logger.exception("faster-whisper is not installed. Please install it with: pip install faster-whisper")
         return []
     except Exception as e:
-        logger.error(f"Error during transcription: {e}")
+        logger.exception(f"Error during transcription: {e}")
         return []
 
 def main():
@@ -85,14 +85,14 @@ def main():
 
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level)
+    setup_logging(level=log_level, enable_logfire=True)
 
     # Define the input file path
     input_file = args.file_path
 
     # Check if the input file exists
     if not os.path.exists(input_file):
-        logger.error(f"Input file does not exist: {input_file}")
+        logger.exception(f"Input file does not exist: {input_file}")
         return
 
     logger.info(f"Starting transcription for: {input_file}")
@@ -116,12 +116,11 @@ def main():
             os.makedirs(transcript_dir, exist_ok=True)
 
         with open(transcript_file, 'w', encoding='utf-8') as f:
-            f.write("Timestamped Transcription:\n\n")
             for segment in segments:
                 f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
         logger.info(f"Transcription saved to: {transcript_file}")
     else:
-        logger.error("Transcription failed.")
+        logger.exception("Transcription failed.")
 
 if __name__ == "__main__":
     main()

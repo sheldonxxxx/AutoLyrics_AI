@@ -163,7 +163,7 @@ def extract_metadata(file_path):
     except FLACNoHeaderError:
         logger.warning(f"No FLAC header found in {file_path}")
     except Exception as e:
-        logger.error(f"Error reading metadata from {file_path}: {e}")
+        logger.exception(f"Error reading metadata from {file_path}: {e}")
     
     return metadata
 
@@ -181,14 +181,14 @@ def main():
     
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level)
+    setup_logging(level=log_level, enable_logfire=True)
     
     # Define the input file path
     input_file = args.file_path
     
     # Check if the input file exists
     if not os.path.exists(input_file):
-        logger.error(f"Input file does not exist: {input_file}")
+        logger.exception(f"Input file does not exist: {input_file}")
         return
     
     logger.info(f"Extracting metadata from: {input_file}")

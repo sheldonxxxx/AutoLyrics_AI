@@ -23,11 +23,10 @@ Logger Colors: DEBUG(Cyan), INFO(Green), WARNING(Yellow), ERROR(Red), CRITICAL(M
 
 Used By: All pipeline modules for consistent logging
 """
-
-import logging
-import sys
-from pathlib import Path
 import os
+import sys
+import logging
+import logfire
 
 
 class ColoredFormatter(logging.Formatter):
@@ -57,7 +56,7 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 
-def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_handlers=True, use_colors=True):
+def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_handlers=True, use_colors=True, enable_logfire=False):
     """
     Set up consistent logging configuration for all scripts.
 
@@ -67,6 +66,7 @@ def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_hand
         log_format: Custom log format string
         clear_handlers: Whether to clear existing handlers (default: True)
         use_colors: Whether to use colored output for console (default: True)
+        enable_logfire: Whether to enable Logfire observability (default: False)
     """
     # Default log format
     if log_format is None:
@@ -81,7 +81,19 @@ def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_hand
     # Get root logger
     logger = logging.getLogger()
     logger.setLevel(level)
-    
+
+    # Configure Logfire if enabled
+    if enable_logfire:
+        try:
+            logfire.configure(
+                environment=os.getenv('LOGFIRE_ENVIRONMENT', 'development')
+            )
+            logfire.instrument_pydantic_ai()
+            # logfire.instrument_httpx(capture_all=True) 
+        except Exception as e:
+            # Log the error but don't fail the entire setup
+            print(f"Warning: Failed to configure Logfire: {e}", file=sys.stderr)
+
     # Clear any existing handlers if requested
     if clear_handlers:
         logger.handlers.clear()
@@ -106,8 +118,26 @@ def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_hand
     else:
         console_handler.setFormatter(formatter)
 
+    # Add console handler for consistent formatting
     logger.addHandler(console_handler)
-    
+
+    # Add Logfire handler if enabled (configured to not duplicate console output)
+    if enable_logfire:
+        try:
+            # Configure Logfire to only send to remote service, not console
+            logfire.configure(
+                environment=os.getenv('LOGFIRE_ENVIRONMENT', 'development'),
+                console=False  # Disable console output from Logfire
+            )
+            logfire.instrument_pydantic_ai()
+
+            # Create handler that only sends to Logfire service
+            logfire_handler = logfire.LogfireLoggingHandler()
+            logger.addHandler(logfire_handler)
+        except Exception as e:
+            # Log the error but don't fail the entire setup
+            print(f"Warning: Failed to add Logfire handler: {e}", file=sys.stderr)
+
     # File handler if specified
     if log_file:
         # Create directory if it doesn't exist

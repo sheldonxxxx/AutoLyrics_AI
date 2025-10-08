@@ -177,10 +177,10 @@ def search_uta_net(song_title, artist_name):
             return None
             
     except requests.RequestException as e:
-        logger.error(f"Error during web request: {e}")
+        logger.exception(f"Error during web request: {e}")
         return None
     except Exception as e:
-        logger.error(f"Error during lyrics search: {e}")
+        logger.exception(f"Error during lyrics search: {e}")
         return None
 
 
@@ -199,14 +199,14 @@ def main():
     
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level)
+    setup_logging(level=log_level, enable_logfire=True)
     
     # Define the input file path
     input_file = args.file_path
     
     # Check if the input file exists
     if not os.path.exists(input_file):
-        logger.error(f"Input file does not exist: {input_file}")
+        logger.exception(f"Input file does not exist: {input_file}")
         return
     
     logger.info(f"Extracting metadata from: {input_file}")
