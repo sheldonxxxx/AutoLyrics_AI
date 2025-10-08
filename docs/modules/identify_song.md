@@ -73,10 +73,10 @@ python identify_song.py --file transcript.txt --result-file cache.json
 
 ### Programmatic Usage
 ```python
-from identify_song import identify_song_from_asr_with_retry
+from identify_song import identify_song_from_asr
 
 # Basic identification
-result = identify_song_from_asr_with_retry(transcript_text, max_retries=3)
+result = identify_song_from_asr(transcript_text, max_retries=3)
 
 if result:
     song_title, artist_name, language = result
@@ -85,7 +85,7 @@ else:
     print("Could not identify song from transcript")
 
 # With caching for performance
-result = identify_song_from_asr_with_retry(
+result = identify_song_from_asr(
     transcript_text,
     result_file_path="cache/song_id.json",
     force_recompute=False

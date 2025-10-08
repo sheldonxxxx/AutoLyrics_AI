@@ -25,7 +25,6 @@ Pipeline Stage: 2/6 (Song Identification - Fallback)
 import os
 import logging
 import json
-import asyncio
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -56,10 +55,10 @@ class SearxngLimitingToolset(WrapperToolset):
         super().__init__(wrapped)
         self.max_results = max_results
 
-    async def call_tool(self, name: str, tool_args: dict[str, Any], ctx, tool) -> Any:
+    def call_tool(self, name: str, tool_args: dict[str, Any], ctx, tool) -> Any:
         """Intercept tool calls and limit SearXNG results."""
         # Call the original tool first
-        result = await super().call_tool(name, tool_args, ctx, tool)
+        result = super().call_tool(name, tool_args, ctx, tool)
 
         # If this is a SearXNG search tool, limit results
         if name == "searxng_web_search":
@@ -140,7 +139,7 @@ class SongIdentifier:
             instrument=instrumentation_settings
         )
 
-    async def identify_song(self, transcript: str) -> Optional[SongIdentification]:
+    def identify_song(self, transcript: str) -> Optional[SongIdentification]:
         """
         Identify song name and artist from ASR transcript using remote MCP server.
 
@@ -182,18 +181,8 @@ class SongIdentifier:
 
             # Use Pydantic AI agent to run the identification with remote MCP server
             logger.info("Running song identification with Pydantic AI agent and remote MCP server")
-            async with self.agent:
-                logger.debug("Starting agent.run()...")
-                try:
-                    # Add timeout to prevent hanging
-                    result = await asyncio.wait_for(
-                        self.agent.run(user_prompt),
-                        timeout=60.0  # 60 second timeout
-                    )
-                    logger.debug("Agent.run() completed successfully")
-                except asyncio.TimeoutError:
-                    logger.exception("Agent.run() timed out after 60 seconds")
-                    return None
+            result = self.agent.run_sync(user_prompt)
+            logger.debug("Agent.run_sync() completed successfully")
 
             if not result or not result.output:
                 logger.exception("No result returned from Pydantic AI agent")
@@ -229,7 +218,7 @@ class SongIdentifier:
                 )
                 if not song_result.lyrics_found:
                     logger.info("No lyrics found in result")
-                    
+
                 return song_result
             else:
                 logger.warning(
@@ -242,7 +231,7 @@ class SongIdentifier:
             logger.exception(f"Error during song identification: {e}")
             return None
 
-    async def identify_song_with_metadata(self, transcript: str, metadata: dict) -> Optional[SongIdentification]:
+    def identify_song_with_metadata(self, transcript: str, metadata: dict) -> Optional[SongIdentification]:
         """
         Identify song and search for lyrics using both metadata and ASR transcript.
 
@@ -292,18 +281,8 @@ class SongIdentifier:
 
             # Use Pydantic AI agent to run the identification with remote MCP server
             logger.info("Running song identification with metadata using Pydantic AI agent and MCP server")
-            async with self.agent:
-                logger.debug("Starting agent.run() for metadata scenario...")
-                try:
-                    # Add timeout to prevent hanging
-                    result = await asyncio.wait_for(
-                        self.agent.run(user_prompt),
-                        timeout=60.0  # 60 second timeout
-                    )
-                    logger.debug("Agent.run() completed successfully for metadata scenario")
-                except asyncio.TimeoutError:
-                    logger.exception("Agent.run() timed out after 60 seconds for metadata scenario")
-                    return None
+            result = self.agent.run_sync(user_prompt)
+            logger.debug("Agent.run_sync() completed successfully for metadata scenario")
 
             if not result or not result.output:
                 logger.exception("No result returned from Pydantic AI agent for metadata scenario")
@@ -353,7 +332,7 @@ class SongIdentifier:
             return None
 
 
-async def identify_song_from_asr_with_retry(transcript: str, paths: Path, force_recompute: bool = False, max_retries: int = 3, max_search_results: int = 5, metadata: Optional[dict] = None) -> Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]:
+def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool = False, max_retries: int = 3, max_search_results: int = 5, metadata: Optional[dict] = None) -> Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]:
     """
     Identify song from ASR transcript with retry mechanism and feedback about previous wrong results.
 
@@ -404,9 +383,9 @@ async def identify_song_from_asr_with_retry(transcript: str, paths: Path, force_
         # Perform new identification
         identifier = SongIdentifier(max_search_results)
         if metadata is not None:
-            result = await identifier.identify_song_with_metadata(transcript, metadata)
+            result = identifier.identify_song_with_metadata(transcript, metadata)
         else:
-            result = await identifier.identify_song(transcript)
+            result = identifier.identify_song(transcript)
 
         if result and result.confidence_score > 0.5:
             song_info = (result.song_title, result.artist_name, result.native_language, result.lyrics_found, result.lyrics_content, result.lyrics_source_url)
@@ -478,7 +457,7 @@ async def identify_song_from_asr_with_retry(transcript: str, paths: Path, force_
 
     return None
 
-async def main():
+def main():
     """Test function for song identification."""
     import argparse
 
@@ -487,10 +466,10 @@ async def main():
     parser.add_argument('--file', '-f', default="tmp/0017606481/0017606481_transcript.txt", help='File containing ASR transcript')
     parser.add_argument('--result-file', '-r', help='File to save/load song identification results')
     parser.add_argument('--max-search-results', type=int, default=5,
-                          help='Maximum number of search results to return (default: 5)')
+                           help='Maximum number of search results to return (default: 5)')
     parser.add_argument('--log-level', default='INFO',
-                          choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                          help='Logging level (default: INFO)')
+                           choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                           help='Logging level (default: INFO)')
 
     args = parser.parse_args()
 
@@ -524,7 +503,7 @@ async def main():
     paths = {
         'song_identification': args.result_file if args.result_file else "song_identification_result.json",
     }
-    result = await identify_song_from_asr_with_retry(transcript, paths, max_search_results=max_search_results)
+    result = identify_song_from_asr(transcript, paths, max_search_results=max_search_results)
 
     if result:
         song_title, artist_name, native_language, lyrics_found, lyrics_content, lyrics_source_url = result
@@ -542,8 +521,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    async def run_main():
-        result = await main()
-        exit(result)
-
-    asyncio.run(run_main())
+    result = main()
+    exit(result)

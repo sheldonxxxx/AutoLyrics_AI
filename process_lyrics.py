@@ -41,7 +41,7 @@ from separate_vocals import separate_vocals
 from transcribe_vocals import transcribe_with_timestamps
 from generate_lrc import read_lyrics_file, read_transcript_file, generate_lrc_lyrics, correct_grammar_in_transcript
 from translate_lrc import main as translate_main
-from identify_song import identify_song_from_asr_with_retry
+from identify_song import identify_song_from_asr
 from openai import OpenAI
 from dotenv import load_dotenv
 from utils import (
@@ -245,7 +245,7 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
 
 def _identify_song_sync(transcript: str, result_file_path: Optional[str] = None, force_recompute: bool = False, max_retries: int = 3, max_search_results: int = 5, use_metadata: bool = False, metadata: Optional[dict] = None) -> Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]:
     """
-    Synchronous wrapper for the async identify_song_from_asr_with_retry function.
+    Synchronous wrapper for the async identify_song_from_asr function.
 
     Args:
         transcript (str): ASR transcript of the song vocals
@@ -265,7 +265,7 @@ def _identify_song_sync(transcript: str, result_file_path: Optional[str] = None,
         asyncio.set_event_loop(loop)
         try:
             return loop.run_until_complete(
-                identify_song_from_asr_with_retry(
+                identify_song_from_asr(
                     transcript,
                     result_file_path,
                     force_recompute,
