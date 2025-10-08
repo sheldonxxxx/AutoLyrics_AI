@@ -1,4 +1,4 @@
-# Music Lyrics Processing Pipeline
+# LyricSync AI
 
 🎵 **AI-Powered Lyrics Processing** → 🎤 **Vocal Separation** → 🔍 **Song Identification** → 📝 **Synchronized LRC**
 
@@ -27,31 +27,29 @@ This project provides a comprehensive pipeline for processing music files to ext
 ```mermaid
 graph TD
     A[🎵 Input Audio Files]
-    B[🎵 EXTRACT METADATA<br>• Read audio tags (title, artist, album)<br>• Fallback to filename parsing if needed]
+    B[🎵 EXTRACT METADATA<br>Read metadata from file<br>Fallback to filename parsing if needed]
     A --> B
-    C[🎤 SEPARATE VOCALS & TRANSCRIBE<br>• Use UVR to isolate vocals from music<br>• Generate timestamped ASR transcription]
+    C[🎤 SEPARATE VOCALS & TRANSCRIBE<br>Use UVR to isolate vocals from music<br>Generate timestamped ASR transcription]
     B --> C
-    D[🔍 IDENTIFY SONG (if no metadata)<br>• Use LLM + web search on ASR transcript<br>• Retry up to 3 times with feedback<br>• Cache results for future use]
+    D[🔍 IDENTIFY SONG & SEARCH LYRICS<br>Use LLM + web search mcp to <br>1.Idenify song name and artist if no metadata was found<br>2.Download and parse lyrics text]
     C --> D
-    E[📝 SEARCH LYRICS<br>• Query uta-net.com using title + artist<br>• Download and parse lyrics text<br>• Handle Japanese characters properly]
+    E[🎼 GENERATE LRC FILE<br>Use LLM to combine verified lyrics + ASR timestamps<br>Create synchronized mm:ss.xx format<br>Ensure proper timing alignment]
     D --> E
-    F[🎼 GENERATE LRC FILE<br>• Combine verified lyrics + ASR timestamps<br>• Create synchronized [mm:ss.xx] format<br>• Ensure proper timing alignment]
+    F[🌏 TRANSLATE LYRICS<br>Use LLM to convert lyrics while preserving timestamps<br>Create bilingual LRC file<br>Maintain original + translated text]
     E --> F
-    G[🌏 TRANSLATE TO TRADITIONAL CHINESE<br>• Convert lyrics while preserving timestamps<br>• Create bilingual LRC file<br>• Maintain original + translated text]
+    G[🎯 OUTPUT: Synchronized Bilingual LRC Files]
     F --> G
-    H[🎯 OUTPUT: Synchronized Bilingual LRC Files]
-    G --> H
 ```
 
 ### Workflow Details
 
 1. **🎵 Input Processing**: Audio files (FLAC/MP3) are processed recursively from input directory
 2. **📋 Metadata Extraction**: Song title, artist, and other metadata extracted from audio tags
-3. **🎤 Separate Vocals & Transcribe**: Use UVR to isolate vocals, generate timestamped ASR transcription
-4. **🔍 Song Identification**: If metadata missing, LLM identifies song from ASR transcript (up to 3 retries)
-5. **📝 Lyrics Search**: Downloads lyrics from uta-net.com using title + artist
-6. **🎼 LRC Generation**: Creates synchronized LRC file combining lyrics + ASR timestamps
-7. **🌏 Translation**: Translates LRC to Traditional Chinese while preserving timestamps
+3. **🔍 Identify Song & Search Lyrics**: If no metadata, use LLM to identify song; search for lyrics using web-search-mcp
+4. **🎤 Separate Vocals & Transcribe**: Use UVR to isolate vocals, generate timestamped ASR transcription
+5. **🎼 LRC Generation**: Creates synchronized LRC file combining lyrics + ASR timestamps
+6. **🌏 Translation**: Translates LRC to target language while preserving timestamps
+7. **🎯 Output**: Saves synchronized bilingual LRC files to output directory
 
 ### Quality Assurance Features
 
@@ -66,7 +64,7 @@ graph TD
 ```bash
 # 1. Clone and setup
 git clone <repository-url>
-cd music-lyric
+cd lyric_gen
 uv sync
 
 # 2. Configure API (create .env file)
@@ -80,10 +78,10 @@ uv run process_lyrics.py input/ --resume
 ### 📋 What Happens
 1. **Auto-detects** all audio files in `input/` folder
 2. **Extracts** song metadata (title, artist) from audio tags
-3. **Identifies** songs from vocals if metadata missing (AI-powered)
-4. **Downloads** lyrics from uta-net.com
+3. **Identifies** songs and searches for lyrics (AI-powered if metadata missing)
+4. **Separates** vocals and generates timestamped transcription
 5. **Creates** synchronized LRC files with timestamps
-6. **Translates** to Traditional Chinese
+6. **Translates** to Target language
 
 ### 🎵 Input/Output Example
 ```mermaid
@@ -108,7 +106,7 @@ graph TD
         output[output/]
         output_artist1[artist1/]
         output --> output_artist1
-        lrc1[song1.lrc<br>Synchronized lyrics (Original + Traditional Chinese)]
+        lrc1[song1.lrc<br>Synchronized Bilingual LRC Files]
         output_artist1 --> lrc1
         lrc2[song2.lrc]
         output_artist1 --> lrc2
@@ -126,7 +124,7 @@ graph TD
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd music-lyric
+cd lyric_gen
 ```
 
 2. Install dependencies using uv:
@@ -210,44 +208,9 @@ uv run extract_metadata.py input/your_song.flac --log-level DEBUG
 - Output files are saved in the `output/` directory
 - Models are stored in the `models/` directory
 
-## Project Structure
-
-```mermaid
-graph TD
-    root[music-lyric/]
-    input[input/<br>Input audio files]
-    root --> input
-    output[output/<br>Output lyrics, transcripts, and LRC files]
-    root --> output
-    models[models/<br>Audio separation and transcription models]
-    root --> models
-    logging[logging_config.py<br>Centralized logging configuration]
-    root --> logging
-    extract[extract_metadata.py<br>Extract metadata from audio files]
-    root --> extract
-    identify[identify_song.py<br>Identify songs from ASR transcripts (with retry)]
-    root --> identify
-    search[search_lyrics.py<br>Search for lyrics online]
-    root --> search
-    separate[separate_vocals.py<br>Separate vocals from music]
-    root --> separate
-    transcribe[transcribe_vocals.py<br>Generate timestamped transcriptions]
-    root --> transcribe
-    generate[generate_lrc.py<br>Generate LRC format lyrics]
-    root --> generate
-    translate[translate_lrc.py<br>Translate LRC lyrics]
-    root --> translate
-    process[process_lyrics.py<br>Orchestrate complete lyrics processing workflow<br>Main batch processing entry point]
-    root --> process
-    debug[debug_metadata.py<br>Debug script for metadata]
-    root --> debug
-    readme[README.md<br>This file]
-    root --> readme
-```
-
 ## Requirements
 
-- Python 3.8+
+- Python 3.13+
 - [uv](https://github.com/astral-sh/uv) for package management
 - Required Python packages (see `pyproject.toml`)
 - Audio files in common formats (FLAC, MP3, etc.)
