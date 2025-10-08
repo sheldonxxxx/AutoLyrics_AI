@@ -6,11 +6,11 @@ This module is the core of the Music Lyrics Processing Pipeline, responsible for
 
 ## Pipeline Integration
 
-```
-Lyrics +           ┌──────────────────┐    Translation
-ASR Timestamps ───▶ │  generate_lrc    │ ───▶ (next step)
-                   │  (this module)   │
-                   └──────────────────┘
+```mermaid
+graph LR
+    A[Lyrics] --> B[generate_lrc]
+    C[ASR Timestamps] --> B
+    B --> D[Translation]
 ```
 
 ## Core Functionality
@@ -411,6 +411,6 @@ print('Correction result:', result)
 ## Related Documentation
 
 - [Main Project README](../../README.md) - Project overview and setup
-- [Lyrics Verification Module](verify_lyrics.md) - Previous pipeline stage
+- [Search Lyrics Module](search_lyrics.md) - Previous pipeline stage
 - [Translation Module](translate_lrc.md) - Next pipeline stage
 - [Utils Module](utils.md) - Shared utility functions

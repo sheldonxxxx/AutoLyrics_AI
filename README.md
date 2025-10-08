@@ -1,6 +1,6 @@
 # Music Lyrics Processing Pipeline
 
-🎵 **AI-Powered Lyrics Processing** → 🎤 **Vocal Separation** → 🔍 **Smart Verification** → 📝 **Synchronized LRC**
+🎵 **AI-Powered Lyrics Processing** → 🎤 **Vocal Separation** → 🔍 **Song Identification** → 📝 **Synchronized LRC**
 
 This project provides a comprehensive pipeline for processing music files to extract lyrics, separate vocals, and generate synchronized LRC format lyrics with translation capabilities.
 
@@ -8,16 +8,15 @@ This project provides a comprehensive pipeline for processing music files to ext
 
 | **Input** | **Process** | **Output** |
 |-----------|-------------|------------|
-| Audio files (FLAC/MP3) | AI separates vocals → transcribes → finds lyrics → **verifies accuracy** → syncs timestamps | Bilingual LRC files (Original + Traditional Chinese) |
+| Audio files (FLAC/MP3) | AI separates vocals → transcribes → identifies songs → finds lyrics → syncs timestamps | Bilingual LRC files (Original + Traditional Chinese) |
 
-**Key Innovation**: LLM-powered verification ensures only matching lyrics proceed to LRC generation, with retry logic for song identification.
+**Key Innovation**: LLM-powered song identification from ASR transcripts enables processing of files without metadata, with retry logic for accuracy.
 
 ## Features
 
 - **Metadata Extraction**: Extract song title, artist, and other metadata from audio files
 - **Song Identification**: Identify songs from ASR transcripts using LLM and web search (with retry)
 - **Lyrics Search**: Search for lyrics on uta-net.com using song title and artist
-- **Lyrics Verification**: Verify downloaded lyrics match ASR content using LLM (prevents incorrect lyrics)
 - **Vocal Separation**: Separate vocals from music using audio-separator
 - **Transcription**: Generate timestamped transcription of vocals using Whisper
 - **LRC Generation**: Combine verified lyrics and transcription to create synchronized LRC files
@@ -25,65 +24,23 @@ This project provides a comprehensive pipeline for processing music files to ext
 
 ## Pipeline Workflow
 
-```
-🎵 Input Audio Files
-         │
-         ▼
-┌─────────────────────────────────────────────────┐
-│  🎵 EXTRACT METADATA                            │
-│  • Read audio tags (title, artist, album)       │
-│  • Fallback to filename parsing if needed       │
-└─────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────┐
-│  🎤 SEPARATE VOCALS & TRANSCRIBE                │
-│  • Use UVR to isolate vocals from music         │
-│  • Generate timestamped ASR transcription       │
-└─────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────┐
-│  🔍 IDENTIFY SONG (if no metadata)              │
-│  • Use LLM + web search on ASR transcript       │
-│  • Retry up to 3 times with feedback            │
-│  • Cache results for future use                 │
-└─────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────┐
-│  📝 SEARCH LYRICS                               │
-│  • Query uta-net.com using title + artist       │
-│  • Download and parse lyrics text              │
-│  • Handle Japanese characters properly          │
-└─────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────┐
-│  ✅ VERIFY LYRICS MATCH ASR                     │
-│  • **NEW: LLM compares lyrics vs transcript**    │
-│  • Requires ≥60% confidence for match           │
-│  • Prevents wrong lyrics from proceeding        │
-└─────────────────────────────────────────────────┘
-         │ (if verification passes)
-         ▼
-┌─────────────────────────────────────────────────┐
-│  🎼 GENERATE LRC FILE                           │
-│  • Combine verified lyrics + ASR timestamps     │
-│  • Create synchronized [mm:ss.xx] format        │
-│  • Ensure proper timing alignment               │
-└─────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────┐
-│  🌏 TRANSLATE TO TRADITIONAL CHINESE           │
-│  • Convert lyrics while preserving timestamps   │
-│  • Create bilingual LRC file                    │
-│  • Maintain original + translated text          │
-└─────────────────────────────────────────────────┘
-         │
-         ▼
-🎯 OUTPUT: Synchronized Bilingual LRC Files
+```mermaid
+graph TD
+    A[🎵 Input Audio Files]
+    B[🎵 EXTRACT METADATA<br>• Read audio tags (title, artist, album)<br>• Fallback to filename parsing if needed]
+    A --> B
+    C[🎤 SEPARATE VOCALS & TRANSCRIBE<br>• Use UVR to isolate vocals from music<br>• Generate timestamped ASR transcription]
+    B --> C
+    D[🔍 IDENTIFY SONG (if no metadata)<br>• Use LLM + web search on ASR transcript<br>• Retry up to 3 times with feedback<br>• Cache results for future use]
+    C --> D
+    E[📝 SEARCH LYRICS<br>• Query uta-net.com using title + artist<br>• Download and parse lyrics text<br>• Handle Japanese characters properly]
+    D --> E
+    F[🎼 GENERATE LRC FILE<br>• Combine verified lyrics + ASR timestamps<br>• Create synchronized [mm:ss.xx] format<br>• Ensure proper timing alignment]
+    E --> F
+    G[🌏 TRANSLATE TO TRADITIONAL CHINESE<br>• Convert lyrics while preserving timestamps<br>• Create bilingual LRC file<br>• Maintain original + translated text]
+    F --> G
+    H[🎯 OUTPUT: Synchronized Bilingual LRC Files]
+    G --> H
 ```
 
 ### Workflow Details
@@ -93,14 +50,13 @@ This project provides a comprehensive pipeline for processing music files to ext
 3. **🎤 Separate Vocals & Transcribe**: Use UVR to isolate vocals, generate timestamped ASR transcription
 4. **🔍 Song Identification**: If metadata missing, LLM identifies song from ASR transcript (up to 3 retries)
 5. **📝 Lyrics Search**: Downloads lyrics from uta-net.com using title + artist
-6. **✅ Quality Verification**: **NEW: LLM verifies lyrics match ASR content (≥60% confidence required)**
-7. **🎼 LRC Generation**: Creates synchronized LRC file combining verified lyrics + ASR timestamps
-8. **🌏 Translation**: Translates LRC to Traditional Chinese while preserving timestamps
+6. **🎼 LRC Generation**: Creates synchronized LRC file combining lyrics + ASR timestamps
+7. **🌏 Translation**: Translates LRC to Traditional Chinese while preserving timestamps
 
 ### Quality Assurance Features
 
 - ✅ **Retry Logic**: Song identification retries up to 3 times with feedback
-- ✅ **Verification Gate**: Only verified lyrics (≥60% confidence) proceed to LRC generation
+- ✅ **Fallback Mechanisms**: Multiple strategies for handling missing metadata
 - ✅ **Error Handling**: Graceful degradation if any step fails
 - ✅ **Progress Tracking**: Detailed logging and CSV output for batch processing
 
@@ -126,28 +82,43 @@ uv run process_lyrics.py input/ --resume
 2. **Extracts** song metadata (title, artist) from audio tags
 3. **Identifies** songs from vocals if metadata missing (AI-powered)
 4. **Downloads** lyrics from uta-net.com
-5. **Verifies** lyrics match actual song content (prevents wrong lyrics)
-6. **Creates** synchronized LRC files with timestamps
-7. **Translates** to Traditional Chinese
+5. **Creates** synchronized LRC files with timestamps
+6. **Translates** to Traditional Chinese
 
 ### 🎵 Input/Output Example
-```
-input/
-├── artist1/
-│   ├── song1.flac
-│   └── song2.mp3
-└── artist2/
-    └── album/
-        └── song3.flac
+```mermaid
+graph TD
+    subgraph "Input Structure"
+        input[input/]
+        artist1[artist1/]
+        input --> artist1
+        song1[song1.flac]
+        artist1 --> song1
+        song2[song2.mp3]
+        artist1 --> song2
+        artist2[artist2/]
+        input --> artist2
+        album[album/]
+        artist2 --> album
+        song3[song3.flac]
+        album --> song3
+    end
 
-# After processing:
-output/
-├── artist1/
-│   ├── song1.lrc  # Synchronized lyrics (Original + Traditional Chinese)
-│   └── song2.lrc
-└── artist2/
-    └── album/
-        └── song3.lrc
+    subgraph "Output Structure (After Processing)"
+        output[output/]
+        output_artist1[artist1/]
+        output --> output_artist1
+        lrc1[song1.lrc<br>Synchronized lyrics (Original + Traditional Chinese)]
+        output_artist1 --> lrc1
+        lrc2[song2.lrc]
+        output_artist1 --> lrc2
+        output_artist2[artist2/]
+        output --> output_artist2
+        output_album[album/]
+        output_artist2 --> output_album
+        lrc3[song3.lrc]
+        output_album --> lrc3
+    end
 ```
 
 ## Installation
@@ -176,28 +147,28 @@ OPENAI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
 
 Run the main pipeline with default settings:
 ```bash
-uv run main.py
+uv run process_lyrics.py
 ```
 
 ### Individual Components
 
-The pipeline can be run in parts using the main script:
+Each pipeline component can be run independently:
 
 ```bash
 # Extract metadata from an audio file
-uv run main.py metadata --file input/your_song.flac
+uv run extract_metadata.py input/your_song.flac
 
 # Search for lyrics online
-uv run main.py search --file input/your_song.flac
+uv run search_lyrics.py input/your_song.flac
 
 # Separate vocals and transcribe
-uv run main.py separate --file input/your_song.flac
+uv run separate_vocals.py input/your_song.flac
 
 # Generate LRC lyrics from transcript
-uv run main.py generate --file input/your_song.flac
+uv run generate_lrc.py
 
 # Translate LRC lyrics to Traditional Chinese
-uv run main.py translate --file input/your_song.flac
+uv run translate_lrc.py input/your_song.lrc
 ```
 
 ### Individual Scripts
@@ -241,24 +212,37 @@ uv run extract_metadata.py input/your_song.flac --log-level DEBUG
 
 ## Project Structure
 
-```
-music-lyric/
-├── input/                  # Input audio files
-├── output/                 # Output lyrics, transcripts, and LRC files
-├── models/                 # Audio separation and transcription models
-├── logging_config.py       # Centralized logging configuration
-├── extract_metadata.py     # Extract metadata from audio files
-├── identify_song.py        # Identify songs from ASR transcripts (with retry)
-├── search_lyrics.py        # Search for lyrics online
-├── verify_lyrics.py        # NEW: Verify lyrics match ASR content
-├── separate_vocals.py      # Separate vocals from music
-├── transcribe_vocals.py    # Generate timestamped transcriptions
-├── generate_lrc.py         # Generate LRC format lyrics
-├── translate_lrc.py        # Translate LRC lyrics
-├── process_lyrics.py       # NEW: Orchestrate full workflow with verification
-├── debug_metadata.py       # Debug script for metadata
-├── main.py                 # Main entry point
-└── README.md               # This file
+```mermaid
+graph TD
+    root[music-lyric/]
+    input[input/<br>Input audio files]
+    root --> input
+    output[output/<br>Output lyrics, transcripts, and LRC files]
+    root --> output
+    models[models/<br>Audio separation and transcription models]
+    root --> models
+    logging[logging_config.py<br>Centralized logging configuration]
+    root --> logging
+    extract[extract_metadata.py<br>Extract metadata from audio files]
+    root --> extract
+    identify[identify_song.py<br>Identify songs from ASR transcripts (with retry)]
+    root --> identify
+    search[search_lyrics.py<br>Search for lyrics online]
+    root --> search
+    separate[separate_vocals.py<br>Separate vocals from music]
+    root --> separate
+    transcribe[transcribe_vocals.py<br>Generate timestamped transcriptions]
+    root --> transcribe
+    generate[generate_lrc.py<br>Generate LRC format lyrics]
+    root --> generate
+    translate[translate_lrc.py<br>Translate LRC lyrics]
+    root --> translate
+    process[process_lyrics.py<br>Orchestrate complete lyrics processing workflow<br>Main batch processing entry point]
+    root --> process
+    debug[debug_metadata.py<br>Debug script for metadata]
+    root --> debug
+    readme[README.md<br>This file]
+    root --> readme
 ```
 
 ## Requirements
@@ -278,12 +262,7 @@ music-lyric/
 3. **File Not Found**: Ensure input files exist in the correct directory
 4. **Model Issues**: Some models may need to be downloaded automatically on first use
 
-### New Features Troubleshooting
-
-**Lyrics Verification Failed**
-- **Problem**: Lyrics don't match ASR content (confidence <60%)
-- **Solution**: Check if the downloaded lyrics are for the correct song, or if the ASR transcription has quality issues
-- **Tip**: The system will retry song identification up to 3 times if verification fails
+### Troubleshooting
 
 **Song Identification Issues**
 - **Problem**: Cannot identify song from ASR transcript

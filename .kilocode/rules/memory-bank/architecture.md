@@ -6,22 +6,16 @@ Modular pipeline architecture with independent components that can run standalon
 
 ### Pipeline Flow
 
-```
-Input FLAC Files
-       ↓
-[extract_metadata.py] → Extract song metadata (title, artist, etc.)
-       ↓ (if no metadata)
-[identify_song.py] → Identify song from ASR transcript (with retry)
-       ↓
-[search_lyrics.py] → Search for lyrics on uta-net.com
-       ↓
-[verify_lyrics.py] → NEW: Verify lyrics match ASR content using LLM
-       ↓ (if verification passes)
-[generate_lrc.py] → Combine verified lyrics and ASR transcript to create LRC
-       ↓
-[translate_lrc.py] → Translate LRC to Traditional Chinese
-       ↓
-Output: Synchronized LRC files in output directory
+```mermaid
+graph TD
+    A[Input FLAC Files] --> B[extract_metadata.py<br/>Extract song metadata]
+    B --> C{metadata available?}
+    C -->|no| D[identify_song.py<br/>Identify song from ASR transcript<br/>with retry]
+    C -->|yes| E[search_lyrics.py<br/>Search for lyrics on uta-net.com]
+    D --> E
+    E --> F[generate_lrc.py<br/>Combine lyrics and ASR transcript<br/>to create LRC]
+    F --> G[translate_lrc.py<br/>Translate LRC to Traditional Chinese]
+    G --> H[Output: Synchronized LRC files<br/>in output directory]
 ```
 
 ### Core Components
@@ -54,13 +48,9 @@ Output: Synchronized LRC files in output directory
 - Translates LRC lyrics to Traditional Chinese
 - Preserves timestamps and formatting
 
-#### Verification (`verify_lyrics.py`)
-- Verifies lyrics match ASR content using LLM
-- Prevents incorrect lyrics from proceeding
-
 #### Batch Processing (`process_lyrics.py`)
 - Orchestrates full workflow with progress tracking
-- Includes verification and retry mechanisms
+- Includes retry mechanisms
 
 ### Data Flow Architecture
 
@@ -135,3 +125,4 @@ docs/
 - **Centralized Module Documentation**: Comprehensive markdown files (~400 lines each)
 - **Cross-Referenced Architecture**: Documentation links between related modules
 - **AI-Optimized Structure**: Efficient for automated maintenance and context window management
+- **Chart Format**: Use Mermaid for all charts and diagrams in this project

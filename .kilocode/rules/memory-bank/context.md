@@ -15,10 +15,8 @@ Processing music files with lyrics from uta-net.com. Pipeline combines AI techno
 - Bilingual LRC support (original + Traditional Chinese)
 - Separated UVR/ASR into distinct modules for better modularity
 - Song-specific folder structure in `tmp/{relative_path}/{filename}/`
-- **NEW: LLM-based lyrics verification system**
-- **NEW: Enhanced song identification with retry mechanism**
-- **NEW: Quality assurance workflow** (≥60% confidence threshold)
-- **NEW: Centralized documentation architecture**
+- Enhanced song identification with retry mechanism
+- Centralized documentation architecture
 
 ## Next Steps
 

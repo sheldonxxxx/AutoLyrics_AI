@@ -6,12 +6,10 @@ This module is the flagship component of the Music Lyrics Processing Pipeline, p
 
 ## Pipeline Integration
 
-```
-Music Library      ┌──────────────────┐    Synchronized LRC
-(multiple files) ─▶ │  process_lyrics  │ ───▶ Files with Translation
-                   │  (batch          │
-                   │  orchestrator)   │
-                   └──────────────────┘
+```mermaid
+flowchart TD
+    A[Music Library<br/>(multiple files)] --> B[process_lyrics<br/>(batch orchestrator)]
+    B --> C[Synchronized LRC<br/>Files with Translation]
 ```
 
 ## Core Functionality
@@ -53,11 +51,11 @@ Music Library      ┌──────────────────┐ 
 - Support resume functionality (skip if exists)
 - Continue to lyrics search
 
-### Stage 4: Lyrics Search & Verification
-**Purpose**: Find and verify lyrics match audio content
+### Stage 4: Lyrics Search & Identification
+**Purpose**: Find lyrics using metadata and ASR-based song identification
 - Search uta-net.com using metadata
-- Fallback to ASR-based song identification (3 retry attempts)
-- Verify downloaded lyrics match ASR content (≥60% confidence)
+- Fallback to LLM-based song identification from ASR transcripts
+- Use web search to identify unknown songs
 - Continue to LRC generation
 
 ### Stage 5: LRC Generation
@@ -103,33 +101,32 @@ Music Library      ┌──────────────────┐ 
 ## Directory Structure Management
 
 ### Input Structure
-```
-input/
-├── album1/
-│   ├── song1.flac
-│   └── song2.flac
-└── singles/
-    └── song3.flac
+```mermaid
+flowchart TD
+    input --> album1
+    album1 --> song1.flac
+    album1 --> song2.flac
+    input --> singles
+    singles --> song3.flac
 ```
 
 ### Processing Structure
-```
-tmp/
-├── album1/
-│   └── song1/
-│       ├── song1_(Vocals)_UVR_MDXNET_Main.wav      # Stage 2 output
-│       ├── song1_(Vocals)_UVR_MDXNET_Main_transcript.txt # Stage 3 output
-│       ├── song1_lyrics.txt                         # Stage 4 output
-│       └── song1.lrc                                # Stage 5 output
-└── singles/
-    └── song3/
-        └── ...
+```mermaid
+flowchart TD
+    tmp --> album1_tmp
+    album1_tmp --> song1_tmp
+    song1_tmp --> song1_vocals.wav
+    song1_tmp --> song1_transcript.txt
+    song1_tmp --> song1_lyrics.txt
+    song1_tmp --> song1.lrc
+    tmp --> singles_tmp
+    singles_tmp --> song3_tmp
+    song3_tmp --> ...
 
-output/
-├── album1/
-│   └── song1.lrc (bilingual)                        # Stage 6 output
-└── singles/
-    └── song3.lrc (bilingual)
+    output --> album1_out
+    album1_out --> song1_bilingual.lrc
+    output --> singles_out
+    singles_out --> song3_bilingual.lrc
 ```
 
 ## Processing Results System
@@ -145,7 +142,7 @@ output/
 - File information (name, path, timestamps)
 - Metadata extraction results (title, artist, album, etc.)
 - Audio processing metrics (vocal separation, transcription)
-- Quality assurance results (verification confidence)
+- Quality assurance results (lyrics search success, LRC generation)
 - Error reporting and troubleshooting data
 
 ### Progress Monitoring
@@ -175,11 +172,11 @@ output/
 
 ## Quality Assurance Integration
 
-### Built-in Verification
-1. **Lyrics Verification**:
-   - LLM-based content matching
-   - Confidence scoring and validation
-   - Automatic rejection of poor matches (≥60% threshold)
+### Built-in Validation
+1. **Lyrics Search Validation**:
+   - Content availability checking
+   - Source reliability assessment
+   - Fallback mechanism effectiveness
 
 2. **LRC Validation**:
    - Format compliance checking
@@ -414,7 +411,7 @@ Main function for batch processing all audio files in a directory.
 
 ### Quality Metrics
 **Built-in Quality Assurance:**
-- Lyrics verification confidence scores
+- Lyrics search success rates
 - LRC generation success rates
 - Translation quality indicators
 - Processing time and resource usage

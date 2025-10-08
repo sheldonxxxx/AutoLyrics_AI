@@ -15,14 +15,6 @@
         "get-library-docs"
       ]
     },
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/Users/sheldon/Documents/script/music_lyric"
-      ]
-    },
     "puppeteer": {
       "command": "npx",
       "args": [
