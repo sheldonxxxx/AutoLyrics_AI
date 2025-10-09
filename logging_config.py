@@ -81,22 +81,24 @@ def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_hand
     # Get root logger
     logger = logging.getLogger()
     logger.setLevel(level)
+    
+    # Clear any existing handlers if requested
+    if clear_handlers:
+        logger.handlers.clear()
 
     # Configure Logfire if enabled
     if enable_logfire:
         try:
             logfire.configure(
-                environment=os.getenv('LOGFIRE_ENVIRONMENT', 'development')
+                environment=os.getenv('LOGFIRE_ENVIRONMENT', 'development'),
+                token=os.getenv('LOGFIRE_WRITE_TOKEN'),
+                console=False  # Disable console output from Logfire
             )
             logfire.instrument_pydantic_ai()
             # logfire.instrument_httpx(capture_all=True) 
         except Exception as e:
             # Log the error but don't fail the entire setup
             print(f"Warning: Failed to configure Logfire: {e}", file=sys.stderr)
-
-    # Clear any existing handlers if requested
-    if clear_handlers:
-        logger.handlers.clear()
     
     # Console handler with color support
     console_handler = logging.StreamHandler(sys.stdout)
@@ -120,23 +122,6 @@ def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_hand
 
     # Add console handler for consistent formatting
     logger.addHandler(console_handler)
-
-    # Add Logfire handler if enabled (configured to not duplicate console output)
-    if enable_logfire:
-        try:
-            # Configure Logfire to only send to remote service, not console
-            logfire.configure(
-                environment=os.getenv('LOGFIRE_ENVIRONMENT', 'development'),
-                console=False  # Disable console output from Logfire
-            )
-            logfire.instrument_pydantic_ai()
-
-            # Create handler that only sends to Logfire service
-            logfire_handler = logfire.LogfireLoggingHandler()
-            logger.addHandler(logfire_handler)
-        except Exception as e:
-            # Log the error but don't fail the entire setup
-            print(f"Warning: Failed to add Logfire handler: {e}", file=sys.stderr)
 
     # File handler if specified
     if log_file:

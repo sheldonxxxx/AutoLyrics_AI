@@ -178,7 +178,17 @@ class SongIdentifier:
             self.mcp_server = MCPServerStreamableHTTP(mcp_searxng_server_url)
         else:
             logger.info("MCP_SEARXNG_SERVER_URL not found, falling back to MCPServerStdio")
-            self.mcp_server = MCPServerStdio()
+            SEARXNG_URL = os.getenv('SEARXNG_URL')
+            if SEARXNG_URL:
+                self.mcp_server = MCPServerStdio(
+                    'npx', args=["-y", "mcp-searxng"],
+                    env={
+                        "SEARXNG_URL": SEARXNG_URL
+                    }
+                )
+            else:
+                logger.error("SEARXNG_URL environment variable is required when MCP_SEARXNG_SERVER_URL is not set")
+                raise ValueError("SEARXNG_URL environment variable is required")
 
         # Wrap MCP server with result limiting toolset (configurable limit)
         self.limited_mcp_toolset = SearxngLimitingToolset(self.mcp_server, max_results=max_search_results)

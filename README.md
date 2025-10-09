@@ -2,129 +2,40 @@
 
 🎵 **AI-Powered Lyrics Processing** → 🎤 **Vocal Separation** → 🔍 **Song Identification** → 📝 **Synchronized LRC**
 
-This project provides a comprehensive pipeline for processing music files to extract lyrics, separate vocals, and generate synchronized LRC format lyrics with translation capabilities.
+This project leverages advanced AI agents to process music files, automatically extracting lyrics, generating synchronized LRC format files, and providing translation capabilities through an intelligent multi-stage pipeline.
 
 ## 🚀 Project Summary
 
 | **Input** | **Process** | **Output** |
 |-----------|-------------|------------|
-| Audio files (FLAC/MP3) | AI separates vocals → transcribes → identifies songs → finds lyrics → syncs timestamps | Bilingual LRC files (Original + Traditional Chinese) |
-
-**Key Innovation**: LLM-powered song identification from ASR transcripts enables processing of files without metadata, with retry logic for accuracy.
+| Audio files (FLAC/MP3) | vocals separation  → transcribes → identifies songs → finds lyrics → syncs timestamps | Bilingual LRC files (Original + Target Language) |
 
 ## Features
 
 - **Metadata Extraction**: Extract song title, artist, and other metadata from audio files
-- **Song Identification**: Identify songs from ASR transcripts using LLM and web search (with retry)
-- **Lyrics Search**: Search for lyrics on uta-net.com using song title and artist
+- **Song Identification**: Identify songs from ASR transcripts using AI Agent and web search mcp server
 - **Vocal Separation**: Separate vocals from music using audio-separator
 - **Transcription**: Generate timestamped transcription of vocals using Whisper
+- **Lyrics Search**: Search for lyrics using AI Agent
 - **LRC Generation**: Combine verified lyrics and transcription to create synchronized LRC files
-- **Translation**: Translate LRC lyrics to Traditional Chinese (or other languages)
-
-## Pipeline Workflow
-
-```mermaid
-graph TD
-    A[🎵 Input Audio Files]
-    B[🎵 EXTRACT METADATA<br>Read metadata from file<br>Fallback to filename parsing if needed]
-    A --> B
-    C[🎤 SEPARATE VOCALS & TRANSCRIBE<br>Use UVR to isolate vocals from music<br>Generate timestamped ASR transcription]
-    B --> C
-    D[🔍 IDENTIFY SONG & SEARCH LYRICS<br>Use LLM + web search mcp to <br>1.Idenify song name and artist if no metadata was found<br>2.Download and parse lyrics text]
-    C --> D
-    E[🎼 GENERATE LRC FILE<br>Use LLM to combine verified lyrics + ASR timestamps<br>Create synchronized mm:ss.xx format<br>Ensure proper timing alignment]
-    D --> E
-    F[🌏 TRANSLATE LYRICS<br>Use LLM to convert lyrics while preserving timestamps<br>Create bilingual LRC file<br>Maintain original + translated text]
-    E --> F
-    G[🎯 OUTPUT: Synchronized Bilingual LRC Files]
-    F --> G
-```
+- **Translation**: Translate LRC lyrics to desired language
 
 ### Workflow Details
 
 1. **🎵 Input Processing**: Audio files (FLAC/MP3) are processed recursively from input directory
 2. **📋 Metadata Extraction**: Song title, artist, and other metadata extracted from audio tags
-3. **🔍 Identify Song & Search Lyrics**: If no metadata, use LLM to identify song; search for lyrics using web-search-mcp
-4. **🎤 Separate Vocals & Transcribe**: Use UVR to isolate vocals, generate timestamped ASR transcription
+3. **🎤 Separate Vocals & Transcribe**: Use UVR to isolate vocals, generate timestamped ASR transcription
+4. **🔍 Identify Song & Search Lyrics**: If no metadata, use LLM to identify song; search for lyrics using web-search-mcp
 5. **🎼 LRC Generation**: Creates synchronized LRC file combining lyrics + ASR timestamps
 6. **🌏 Translation**: Translates LRC to target language while preserving timestamps
 7. **🎯 Output**: Saves synchronized bilingual LRC files to output directory
-
-### Quality Assurance Features
-
-- ✅ **Retry Logic**: Song identification retries up to 3 times with feedback
-- ✅ **Fallback Mechanisms**: Multiple strategies for handling missing metadata
-- ✅ **Error Handling**: Graceful degradation if any step fails
-- ✅ **Progress Tracking**: Detailed logging and CSV output for batch processing
-
-## Quick Start Guide
-
-### 🎯 One-Command Setup
-```bash
-# 1. Clone and setup
-git clone <repository-url>
-cd lyric_gen
-uv sync
-
-# 2. Configure API (create .env file)
-echo "OPENAI_API_KEY=your_key_here" > .env
-echo "OPENAI_BASE_URL=https://api-inference.modelscope.cn/v1" >> .env
-
-# 3. Process your music files
-uv run process_lyrics.py input/ --resume
-```
-
-### 📋 What Happens
-1. **Auto-detects** all audio files in `input/` folder
-2. **Extracts** song metadata (title, artist) from audio tags
-3. **Identifies** songs and searches for lyrics (AI-powered if metadata missing)
-4. **Separates** vocals and generates timestamped transcription
-5. **Creates** synchronized LRC files with timestamps
-6. **Translates** to Target language
-
-### 🎵 Input/Output Example
-```mermaid
-graph TD
-    subgraph "Input Structure"
-        input[input/]
-        artist1[artist1/]
-        input --> artist1
-        song1[song1.flac]
-        artist1 --> song1
-        song2[song2.mp3]
-        artist1 --> song2
-        artist2[artist2/]
-        input --> artist2
-        album[album/]
-        artist2 --> album
-        song3[song3.flac]
-        album --> song3
-    end
-
-    subgraph "Output Structure (After Processing)"
-        output[output/]
-        output_artist1[artist1/]
-        output --> output_artist1
-        lrc1[song1.lrc<br>Synchronized Bilingual LRC Files]
-        output_artist1 --> lrc1
-        lrc2[song2.lrc]
-        output_artist1 --> lrc2
-        output_artist2[artist2/]
-        output --> output_artist2
-        output_album[album/]
-        output_artist2 --> output_album
-        lrc3[song3.lrc]
-        output_album --> lrc3
-    end
-```
 
 ## Installation
 
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd lyric_gen
+cd AutoLyrics_AI
 ```
 
 2. Install dependencies using uv:
@@ -134,9 +45,19 @@ uv sync
 
 3. Set up environment variables by creating a `.env` file:
 ```env
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://api-inference.modelscope.cn/v1
-OPENAI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
+OPENAI_API_KEY=
+OPENAI_BASE_URL=
+OPENAI_MODEL=
+
+# MCP Server Configuration for web search (choose one option below)
+# Option 1: Remote MCP server (recommended for production)
+MCP_SEARXNG_SERVER_URL=http://your-server:3000/mcp
+
+# Option 2: Local MCP server (requires npx installed)
+# SEARXNG_URL=http://your-searxng-instance:8080
+
+# Optional: Logfire observability (for advanced logging and monitoring)
+LOGFIRE_WRITE_TOKEN=
 ```
 
 ## Usage
@@ -145,55 +66,83 @@ OPENAI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
 
 Run the main pipeline with default settings:
 ```bash
-uv run process_lyrics.py
+uv run process_lyrics.py <path to input folder>
 ```
 
-### Individual Components
+### Command Line Arguments
 
-Each pipeline component can be run independently:
+The `process_lyrics.py` script supports the following command line arguments:
 
-```bash
-# Extract metadata from an audio file
-uv run extract_metadata.py input/your_song.flac
+| Argument | Short | Description | Default |
+|----------|-------|-------------|---------|
+| `input_dir` | - | Input directory containing audio files (FLAC or MP3) | `input` |
+| `--output-dir` | `-o` | Output directory for final LRC files | `output` |
+| `--temp-dir` | `-t` | Temporary directory for intermediate files | `tmp` |
+| `--resume` | - | Resume processing by skipping files that already have output files | `False` |
+| `--log-level` | - | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
+| `--logfire` | - | Enable Logfire integration for advanced logging | `False` |
+| `--csv-output` | `-c` | CSV file to save processing results | `results_YYYYMMDD_HHMMSS.csv` |
+| `--no-color` | - | Disable colored logging output | `False` |
+| `--target-language` | - | Target language for translation | `Traditional Chinese` |
 
-# Search for lyrics online
-uv run search_lyrics.py input/your_song.flac
-
-# Separate vocals and transcribe
-uv run separate_vocals.py input/your_song.flac
-
-# Generate LRC lyrics from transcript
-uv run generate_lrc.py
-
-# Translate LRC lyrics to Traditional Chinese
-uv run translate_lrc.py input/your_song.lrc
-```
-
-### Individual Scripts
-
-Each component can also be run directly:
+#### Example Usage
 
 ```bash
-# Extract metadata
-uv run extract_metadata.py input/your_song.flac
+# Basic usage with custom directories
+uv run process_lyrics.py /path/to/music --output-dir /path/to/output --temp-dir /path/to/temp
 
-# Debug metadata
-uv run debug_metadata.py input/your_song.flac
+# Resume interrupted processing with debug logging
+uv run process_lyrics.py input --resume --log-level DEBUG
 
-# Search for lyrics
-uv run search_lyrics.py input/your_song.flac
+# Process with custom translation language and CSV output
+uv run process_lyrics.py input --target-language Japanese --csv-output results.csv
 
-# Separate vocals
-uv run separate_vocals.py input/your_song.flac
-
-# Generate LRC lyrics
-uv run generate_lrc.py
-
-# Translate LRC lyrics
-uv run translate_lrc.py input/your_song.lrc
+# Full featured processing with all options
+uv run process_lyrics.py input \
+  --output-dir output \
+  --temp-dir tmp \
+  --resume \
+  --log-level INFO \
+  --csv-output processing_results.csv \
+  --target-language "Traditional Chinese"
 ```
 
 ## Configuration
+
+### Environment Variables
+
+The following environment variables can be configured in your `.env` file:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | API key for OpenAI-compatible service (e.g., DashScope) |
+| `OPENAI_BASE_URL` | Yes | Base URL for the OpenAI-compatible API endpoint |
+| `OPENAI_MODEL` | Yes | Model name for LRC generation and translation |
+| `MCP_SEARXNG_SERVER_URL` | No* | Remote MCP server URL for web search (e.g., `http://server:3000/mcp`) |
+| `SEARXNG_URL` | No* | SearXNG instance URL for local MCP server (fallback when remote MCP not available) |
+| `LOGFIRE_WRITE_TOKEN` | No | Optional token for Logfire observability and advanced logging |
+
+*Note: Either `MCP_SEARXNG_SERVER_URL` or `SEARXNG_URL` is required for song identification functionality.
+
+### Remote MCP Server Setup (Optional)
+
+#### Docker Compose (quickest setup)**
+```yaml
+services:
+  mcp-searxng:
+    image: ghcr.io/sheldonxxxx/mcp-searxng:latest
+    container_name: mcp-searxng
+    environment:
+      - SEARXNG_URL=http://searxng:8080
+      - MCP_HTTP_PORT=3000
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+```
+
+**For detailed setup instructions and configuration, see**: [https://github.com/sheldonxxxx/mcp-searxng.git](https://github.com/sheldonxxxx/mcp-searxng.git)
+
+**List of public Searxng server: [https://searx.space](https://searx.space)**
 
 ### Logging
 
@@ -201,6 +150,18 @@ All scripts support configurable logging levels:
 ```bash
 uv run extract_metadata.py input/your_song.flac --log-level DEBUG
 ```
+
+#### Logfire Integration
+
+For advanced observability and monitoring, you can enable Logfire integration:
+
+1. Set the `LOGFIRE_WRITE_TOKEN` environment variable in your `.env` file
+2. Use the `--logfire` flag when running `process_lyrics.py`:
+```bash
+uv run process_lyrics.py input --logfire
+```
+
+Logfire provides enhanced logging capabilities including structured logging, performance monitoring, and detailed error tracking for production deployments.
 
 ### Output Directories
 
@@ -212,36 +173,105 @@ uv run extract_metadata.py input/your_song.flac --log-level DEBUG
 
 - Python 3.13+
 - [uv](https://github.com/astral-sh/uv) for package management
-- Required Python packages (see `pyproject.toml`)
-- Audio files in common formats (FLAC, MP3, etc.)
 - API key for OpenAI-compatible service for LRC generation and translation
 
-## Troubleshooting
+### Tested Hardware & Models
 
-### Common Issues
+This project has been tested and verified on:
+- **M2 Pro MacBook** (16GB RAM)
+- **Mac Mini M4** (16GB RAM)
 
-1. **Missing Dependencies**: Ensure all dependencies are installed via uv with `uv sync`
-2. **API Key Issues**: Verify your API keys are correctly set in the `.env` file
-3. **File Not Found**: Ensure input files exist in the correct directory
-4. **Model Issues**: Some models may need to be downloaded automatically on first use
-
-### Troubleshooting
-
-**Song Identification Issues**
-- **Problem**: Cannot identify song from ASR transcript
-- **Solution**: Ensure ASR transcript has sufficient content (at least a few sentences of lyrics)
-- **Tip**: Check the transcript file in `tmp/` folder to see ASR quality
-
-**Low Confidence Results**
-- **Problem**: System returns low confidence matches
-- **Solution**: This is normal for poor quality audio or very obscure songs
-- **Tip**: Consider using higher quality audio files or checking if songs exist on uta-net.com
+**Tested LLM Model:**
+- **Qwen-plus** (via DashScope API)
 
 ### Getting Help
 
 - Check the `tmp/` folder for intermediate files (transcripts, lyrics) to debug issues
 - Use `--log-level DEBUG` for detailed logging information
 - All processing steps are logged with timestamps for troubleshooting
+
+## Docker Deployment (Untested)
+
+The project includes a Dockerfile for easy deployment.
+
+### Quick Start with Docker
+
+1. **Build and run the container:**
+```bash
+# Build the image
+docker build -t music-lyrics-processor .
+
+# Run with default settings
+docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output music-lyrics-processor
+```
+
+2. **Using Docker Compose (recommended):**
+```bash
+# Start all services
+docker-compose up -d
+
+# Start only the lyrics processor
+docker-compose up -d lyrics-processor
+
+# Start with MCP server for web search
+docker-compose --profile mcp up -d
+
+# View logs
+docker-compose logs -f lyrics-processor
+```
+
+### Docker Configuration
+
+#### Environment Variables
+Create a `.env` file in your project root:
+```env
+OPENAI_API_KEY=your_api_key_here
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+
+# Optional: For web search functionality
+MCP_SEARXNG_SERVER_URL=http://localhost:3000/mcp
+SEARXNG_URL=http://localhost:8080
+
+# Optional: For logging and monitoring
+LOGFIRE_WRITE_TOKEN=your_logfire_token
+LOG_LEVEL=INFO
+```
+
+#### Volume Mounts
+- `./input:/app/input:ro` - Input audio files (read-only)
+- `./output:/app/output` - Generated LRC files
+- `./tmp:/app/tmp` - Temporary processing files
+- `./models:/app/models` - Audio separation models
+
+### Docker Commands
+
+#### Basic Usage
+```bash
+# Process audio files
+docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
+  music-lyrics-processor uv run process_lyrics.py /app/input
+
+# With custom settings
+docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
+  -e LOG_LEVEL=DEBUG \
+  music-lyrics-processor uv run process_lyrics.py /app/input --log-level DEBUG
+
+# Resume interrupted processing
+docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
+  music-lyrics-processor uv run process_lyrics.py /app/input --resume
+```
+
+#### Development Workflow
+```bash
+# Run a specific script
+docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
+  music-lyrics-processor uv run extract_metadata.py /app/input/song.flac
+
+# Debug with bash shell
+docker run -it -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
+  --entrypoint /bin/bash music-lyrics-processor
+```
 
 ## Contributing
 
