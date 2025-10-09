@@ -96,10 +96,14 @@ def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_hand
             )
             logfire.instrument_pydantic_ai()
             # logfire.instrument_httpx(capture_all=True) 
+            
+            # Create handler that only sends to Logfire service
+            logfire_handler = logfire.LogfireLoggingHandler()
+            logger.addHandler(logfire_handler)
         except Exception as e:
             # Log the error but don't fail the entire setup
             print(f"Warning: Failed to configure Logfire: {e}", file=sys.stderr)
-    
+
     # Console handler with color support
     console_handler = logging.StreamHandler(sys.stdout)
 
