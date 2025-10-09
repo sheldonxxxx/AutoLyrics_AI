@@ -55,8 +55,11 @@ def find_audio_files(input_dir: str) -> List[Path]:
     for ext in audio_extensions:
         audio_files.extend(list(input_path.rglob(ext)))
 
-    logger.info(f"Found {len(audio_files)} audio files ({', '.join(ext[1:] for ext in audio_extensions)}) in {input_dir}")
-    return audio_files
+    # Filter out macOS resource fork files and other system files starting with '._'
+    filtered_audio_files = [f for f in audio_files if not f.name.startswith('._')]
+
+    logger.info(f"Found {len(filtered_audio_files)} audio files ({', '.join(ext[1:] for ext in audio_extensions)}) in {input_dir} (filtered out {len(audio_files) - len(filtered_audio_files)} system files)")
+    return filtered_audio_files
 
 
 def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str = "tmp", input_base_dir: str = "input") -> dict:
