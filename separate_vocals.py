@@ -82,14 +82,16 @@ def main():
     parser.add_argument('--model', '-m', default="UVR_MDXNET_Main.onnx",
                         help='Model to use for separation (default: UVR_MDXNET_Main.onnx)')
     parser.add_argument('--log-level', default='INFO',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                        help='Logging level (default: INFO)')
+                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                         help='Logging level (default: INFO)')
+    parser.add_argument('--logfire', action='store_true',
+                         help='Enable Logfire integration')
 
     args = parser.parse_args()
 
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level, enable_logfire=True)
+    setup_logging(level=log_level, enable_logfire=args.logfire)
 
     # Define the input file path
     input_file = args.file_path

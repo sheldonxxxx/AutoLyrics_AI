@@ -9,15 +9,14 @@ Python-based pipeline that processes music files to extract lyrics, separate voc
 - **Vocal Separation**: AI-powered vocal isolation from music tracks
 - **ASR Transcription**: Generate timestamped text from vocals
 - **LRC Generation**: Create synchronized lyrics with timing
-- **Translation**: Convert lyrics to Traditional Chinese
+- **Translation**: Translate lyrics to Other Language
 - **Batch Processing**: Process entire music libraries automatically
 
 ## Technology Stack
 - Python 3.13+
 - audio-separator (vocal separation)
 - faster-whisper (speech recognition)
-- OpenAI API (LRC generation/translation)
-- BeautifulSoup4 (web scraping)
+- Pydantic AI (LRC generation/translation)
 - Mutagen (metadata extraction)
 
 ## Value

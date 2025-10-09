@@ -31,7 +31,6 @@ from typing import List
 from mutagen import File
 from openai import OpenAI
 
-from utils import find_flac_files
 from logging_config import get_logger
 ```
 

@@ -22,7 +22,7 @@ Handles the translation of synchronized LRC lyrics to Traditional Chinese, creat
 ## Technical Implementation
 
 ### Dependencies
-- **openai**: OpenAI-compatible API client library
+- **pydantic-ai**: Structured LLM interactions for translation
 - **python-dotenv**: Environment variable management
 - **logging_config**: Consistent logging across pipeline
 - **utils**: Shared utility functions for file I/O and validation

@@ -17,7 +17,7 @@ Modern Python version providing latest language features and performance improve
 - **beautifulsoup4**: HTML parsing for lyric extraction from uta-net.com
 
 ### API Integration
-- **OpenAI-compatible client**: LRC generation and translation
+- **Pydantic AI**: Structured LLM interactions for LRC generation and translation
 - **python-dotenv**: Environment variable management
 
 ### Package Management
@@ -61,7 +61,7 @@ Modern Python version providing latest language features and performance improve
 - beautifulsoup4>=4.14.2
 - faster-whisper>=1.2.0
 - mutagen>=1.47.0
-- openai>=2.0.1
+- pydantic-ai>=1.0.15
 - python-dotenv>=1.1.1
 - requests>=2.32.5
 

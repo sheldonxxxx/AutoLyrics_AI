@@ -55,7 +55,6 @@ graph TD
 ### Data Flow Architecture
 
 #### File Path Management (`utils.py`)
-- `find_flac_files()`: Recursively discovers FLAC files
 - `get_output_paths()`: Maps input files to all intermediate/output paths
 - `ensure_output_directory()`: Creates necessary directories
 

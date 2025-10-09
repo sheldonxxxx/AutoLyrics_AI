@@ -59,26 +59,6 @@ def find_audio_files(input_dir: str) -> List[Path]:
     return audio_files
 
 
-def find_flac_files(input_dir: str) -> List[Path]:
-    """
-    Find all FLAC files in the input directory recursively.
-
-    Args:
-        input_dir (str): Directory to search for FLAC files
-
-    Returns:
-        List[Path]: List of FLAC file paths found
-    """
-    input_path = Path(input_dir)
-    if not input_path.exists():
-        logger.exception(f"Input directory does not exist: {input_dir}")
-        return []
-
-    flac_files = list(input_path.rglob("*.flac"))
-    logger.info(f"Found {len(flac_files)} FLAC files in {input_dir}")
-    return flac_files
-
-
 def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str = "tmp", input_base_dir: str = "input") -> dict:
     """
     Generate output file paths based on the input file path, preserving nested folder structure.
@@ -128,6 +108,7 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
     return {
         'vocals_wav': song_folder / f"{filename_stem}_vocal.wav",
         'transcript_txt': song_folder / f"{filename_stem}_transcript.txt",
+        'transcript_word_txt': song_folder / f"{filename_stem}_transcript_word.txt",
         'corrected_transcript_txt': song_folder / f"{filename_stem}_corrected_transcript.txt",
         'song_identification': song_folder / f"{filename_stem}_song_identification.json",
         'lyrics_txt': song_folder / f"{filename_stem}_lyrics.txt",
@@ -172,9 +153,9 @@ def load_prompt_template(prompt_file_path: str) -> str | None:
         return None
 
 
-def read_lrc_file(file_path: str) -> str:
+def read_file(file_path: str) -> str:
     """
-    Read the LRC file and return its content as a string.
+    Read file and return its content as a string.
 
     Args:
         file_path (str): Path to the LRC file
@@ -183,37 +164,26 @@ def read_lrc_file(file_path: str) -> str:
         str: Content of the LRC file
     """
     with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    return content
-
-
-def read_lyrics_file(file_path: str) -> str:
+        return f.read()
+    
+def write_file(file_path: str, content: str) -> bool:
     """
-    Read the downloaded lyrics from file.
+    Write content to a file.
 
     Args:
-        file_path (str): Path to the lyrics file
+        file_path (str): Path to the file to write
+        content (str): Content to write to the file
 
     Returns:
-        str: Content of the lyrics file
+        bool: True if writing was successful, False otherwise
     """
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read()
-
-
-def read_transcript_file(file_path: str) -> str:
-    """
-    Read the ASR transcript from file.
-
-    Args:
-        file_path (str): Path to the transcript file
-
-    Returns:
-        str: Content of the transcript file
-    """
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read()
-
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return True
+    except Exception as e:
+        logger.exception(f"Error writing to file {file_path}: {e}")
+        return False
 
 def validate_lrc_content(content: str) -> bool:
     """
@@ -233,7 +203,6 @@ def validate_lrc_content(content: str) -> bool:
         return False
 
     # Check for proper LRC timestamp format in at least some lines
-    import re
     timestamp_pattern = r'\[([0-9]{2,3}:[0-9]{2}\.[0-9]{2,3}|[0-9]{2,3}:[0-9]{2})\]'
     has_timestamps = any(re.search(timestamp_pattern, line) for line in lines)
 
@@ -336,57 +305,6 @@ def remove_timestamps_from_transcript(transcript: str) -> str:
     logger.debug(f"Removed timestamps from transcript: {len(transcript)} -> {len(cleaned_transcript)} characters")
     return cleaned_transcript
 
-
-def should_skip_file(paths: dict, resume: bool) -> bool:
-    """
-    Check if essential output files already exist and should be skipped.
-
-    Args:
-        paths (dict): Dictionary of file paths to check
-        resume (bool): Whether resume mode is enabled
-
-    Returns:
-        bool: True if essential files exist and should be skipped, False otherwise
-    """
-    from pathlib import Path
-
-    if not resume:
-        return False
-
-    # Only check for essential output files that should always exist when processing is complete
-    # Skip optional intermediate files like corrected_transcript_txt which may not be created
-    essential_files = [
-        paths['translated_lrc'],  # Final output file
-        paths['lrc']             # Intermediate LRC file before translation
-    ]
-
-    return all(Path(path).exists() for path in essential_files)
-
-
-def extract_lyrics_content(lyrics_content: str) -> str:
-    """
-    Extract actual lyrics content from lyrics file format.
-
-    Args:
-        lyrics_content (str): Raw lyrics content from file
-
-    Returns:
-        str: Extracted lyrics content
-    """
-    lines = lyrics_content.split('\n')
-    lyrics_lines = []
-
-    # Find where actual lyrics start (after headers)
-    for i, line in enumerate(lines):
-        if line.startswith("=" * 10):  # Start of actual lyrics
-            lyrics_lines = lines[i+1:]
-            break
-    else:
-        lyrics_lines = lines[3:]  # Skip title and header lines
-
-    return '\n'.join(lyrics_lines).strip()
-
-
 def get_prompt_file_for_language(target_language: str) -> str:
     """
     Get the appropriate prompt file name for the target language.
@@ -400,12 +318,13 @@ def get_prompt_file_for_language(target_language: str) -> str:
     # Map language names to prompt file names
     language_prompt_map = {
         "Traditional Chinese": "lrc_traditional_chinese_prompt.txt",
-        # Add more languages here as they are supported
+        # Add more specific language prompts here as they are created
         # "English": "lrc_english_prompt.txt",
         # "Japanese": "lrc_japanese_prompt.txt",
     }
 
-    return language_prompt_map.get(target_language, "")
+    # Use specific prompt if available, otherwise use generic prompt
+    return language_prompt_map.get(target_language, "lrc_generic_translation_prompt.txt")
 
 
 def write_csv_results(csv_file_path: str, results: list) -> bool:
@@ -513,9 +432,9 @@ def validate_environment_variables(required_vars: List[str], optional_vars: Opti
     return validated_vars
 
 
-def get_openai_config() -> Dict[str, str]:
+def get_default_llm_config() -> Dict[str, str]:
     """
-    Get OpenAI configuration from environment variables with proper validation.
+    Get API configuration from environment variables with proper validation.
 
     Returns:
         Dict[str, str]: Dictionary containing base_url, api_key, and model
@@ -538,7 +457,7 @@ def get_translation_config() -> Dict[str, str]:
     Raises:
         ValueError: If required environment variables are not set
     """
-    # Try translation-specific variables first, fall back to general OpenAI variables
+    # Try translation-specific variables first, fall back to general API variables
     config = {}
 
     # Check for translation-specific base URL

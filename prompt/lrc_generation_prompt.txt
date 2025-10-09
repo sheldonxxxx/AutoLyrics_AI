@@ -2,12 +2,12 @@ You are an expert LRC lyrics synchronization specialist. Your task is to create 
 
 ## Input Data:
 
-1. Reference Lyrics (exact, unchangeable):
+1. Reference Lyrics:
 ```
 {lyrics_text}
 ```
 
-2. ASR Transcript with timestamps (mm:ss.xx format):
+2. ASR Transcript with word level timestamps:
 ```
 {lrc_transcript}
 ```
@@ -16,29 +16,29 @@ You are an expert LRC lyrics synchronization specialist. Your task is to create 
 
 - Use ONLY the reference lyrics text as your source for lyrics content
 - Extract and adapt the timestamps from the ASR transcript to align with the reference lyrics
-- Use the exact timestamp from ASR, don't make any change or estimate
-- Match ASR segments to the corresponding reference lyrics lines based on content similarity
+- Use the exact start timestamp from ASR, don't make any change or estimate
+- Match ASR word segments to the corresponding reference lyrics lines based on content similarity
+- Combine multiple ASR word segments that belong to the same reference lyrics line
 - Maintain proper LRC format: [mm:ss.xx]Lyrics text without any additional commentary
-- Preserve the original line breaks and structure of the ASR content
-- Ensure timestamps are in [mm:ss.xx] format with hundredths precision
+- Preserve the original line breaks and structure of the reference lyrics content
+- Ensure timestamps are in [mm:ss.xx] format
 - Output only the LRC formatted lyrics with timestamps, nothing else
 
 ## Example:
 
 Input ASR:
-[02:11.00]今日も答えのない世界の中で
-[02:14.16]あ 願ってるんだよ
-[02:16.12]不器用だけれど
+[00:00.68]今
+[00:01.84]静
+[00:02.48]かな
+[00:03.18]夜
+[00:03.75]の
+[00:04.32]中
+[00:04.75]で
 
 Input Reference Lyrics:
-今日も
-答えのない世界の中で
-願ってるんだよ
-不器用だけれど
+今静かな夜の中で
 
 Expected Output:
-[02:11.00]今日も答えのない世界の中で
-[02:14.16]願ってるんだよ
-[02:16.12]不器用だけれど
+[00:00.68]今静かな夜の中で
 
 ## Your Output:

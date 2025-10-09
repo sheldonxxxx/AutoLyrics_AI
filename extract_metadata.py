@@ -49,7 +49,6 @@ def extract_metadata(file_path):
     try:
         if file_path.lower().endswith('.flac'):
             # Use mutagen's FLAC class specifically for FLAC files
-            from mutagen.flac import FLAC
             audio_file = FLAC(file_path)
             tags = audio_file.tags
         else:
@@ -174,14 +173,16 @@ def main():
     parser.add_argument('file_path', nargs='?', default="input/0017480280.flac",
                         help='Path to the audio file to extract metadata from')
     parser.add_argument('--log-level', default='INFO',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                        help='Logging level (default: INFO)')
+                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                         help='Logging level (default: INFO)')
+    parser.add_argument('--logfire', action='store_true',
+                         help='Enable Logfire integration')
     
     args = parser.parse_args()
     
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level, enable_logfire=True)
+    setup_logging(level=log_level, enable_logfire=args.logfire)
     
     # Define the input file path
     input_file = args.file_path

@@ -23,6 +23,7 @@ Pipeline Stage: 2/6 (Song Identification - Fallback)
 """
 
 import os
+import re
 import logging
 import json
 from typing import Dict, List, Optional, Tuple, Any
@@ -38,9 +39,65 @@ from pydantic_ai.models.instrumented import InstrumentationSettings
 from pydantic_ai.toolsets import WrapperToolset
 from dotenv import load_dotenv
 from logging_config import get_logger
-from utils import get_openai_config, load_prompt_template, remove_timestamps_from_transcript
+from utils import get_default_llm_config, load_prompt_template, remove_timestamps_from_transcript
 
 logger = get_logger(__name__)
+
+def extract_lyrics(text):
+    """
+    Aggressively remove all lines containing any markdown, HTML, or link syntax.
+    """
+    
+    # Remove URLs first
+    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r'www\.\S+', '', text)
+    
+    lines = text.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Skip empty lines
+        if not stripped:
+            continue
+        
+        # Remove ANY line containing brackets (link artifacts)
+        if re.search(r'[\[\]\(\)]', stripped):
+            continue
+        
+        # Remove lines with HTML/XML tags
+        if re.search(r'<[^>]*>', stripped):
+            continue
+        
+        # Remove lines starting with # (headers)
+        if stripped.startswith('#'):
+            continue
+        
+        # Remove lines with markdown emphasis markers
+        if re.search(r'[\*_]{1,3}\S', stripped):
+            continue
+        
+        # Remove lines with backticks (code)
+        if '`' in stripped:
+            continue
+        
+        # Remove lines that are only dashes/asterisks/underscores (horizontal rules)
+        if re.match(r'^[\-\*_\s]{3,}$', stripped):
+            continue
+        
+        # Remove lines with copyright
+        if re.search(r'©|Copyright|\(C\)', stripped, re.IGNORECASE):
+            continue
+        
+        # Keep the line
+        cleaned_lines.append(stripped)
+    
+    # Join and clean up
+    result = '\n'.join(cleaned_lines)
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    
+    return result.strip()
 
 class SearxngLimitingToolset(WrapperToolset):
     """Custom wrapper toolset to limit SearXNG search results."""
@@ -55,10 +112,10 @@ class SearxngLimitingToolset(WrapperToolset):
         super().__init__(wrapped)
         self.max_results = max_results
 
-    def call_tool(self, name: str, tool_args: dict[str, Any], ctx, tool) -> Any:
+    async def call_tool(self, name: str, tool_args: dict[str, Any], ctx, tool) -> Any:
         """Intercept tool calls and limit SearXNG results."""
         # Call the original tool first
-        result = super().call_tool(name, tool_args, ctx, tool)
+        result = await super().call_tool(name, tool_args, ctx, tool)
 
         # If this is a SearXNG search tool, limit results
         if name == "searxng_web_search":
@@ -66,6 +123,8 @@ class SearxngLimitingToolset(WrapperToolset):
             logger.info(f"Limiting SearXNG results from {len(result_list)} to {self.max_results}")
             # Return only the first max_results results
             return '\n\n'.join(result_list[:self.max_results])
+        elif name == "web_url_read":
+            result = extract_lyrics(result)
 
         return result
 
@@ -78,7 +137,6 @@ class SongIdentification(BaseModel):
     native_language: str = Field(description="The native language of the song (e.g., 'Japanese', 'English', 'Korean')")
     search_queries_used: List[str] = Field(description="List of search queries that were used")
     reasoning: str = Field(description="Explanation of how the identification was made")
-    lyrics_found: bool = Field(description="Whether lyrics were successfully found and extracted")
     lyrics_content: Optional[str] = Field(description="The extracted lyrics content if found, None otherwise")
     lyrics_source_url: Optional[str] = Field(description="The URL where the lyrics were obtained from, if found")
 
@@ -94,7 +152,7 @@ class SongIdentifier:
         load_dotenv()
 
         # Get OpenAI configuration using utility function
-        config = get_openai_config()
+        config = get_default_llm_config()
 
         # Create OpenAI provider with custom configuration
         openai_provider = OpenAIProvider(
@@ -187,12 +245,6 @@ class SongIdentifier:
 
             if not result or not result.output:
                 logger.exception("No result returned from Pydantic AI agent")
-                logger.exception(f"Result: {result}")
-                return None
-
-            if not isinstance(result.output, SongIdentification):
-                logger.exception(f"Invalid result type: {type(result.output)}")
-                logger.exception(f"Expected SongIdentification, got: {result.output}")
                 return None
 
             song_result = result.output
@@ -210,14 +262,14 @@ class SongIdentifier:
                 return None
 
             # Check confidence threshold
-            if song_result.confidence_score > 0.3:
+            if song_result.confidence_score > 0.7:
                 logger.info(
                     f"Successfully identified song: '{song_result.song_title}' "
                     f"by '{song_result.artist_name}' "
                     f"({song_result.native_language}) - "
                     f"confidence: {song_result.confidence_score:.2f}"
                 )
-                if not song_result.lyrics_found:
+                if not song_result.lyrics_content:
                     logger.info("No lyrics found in result")
 
                 return song_result
@@ -290,11 +342,6 @@ class SongIdentifier:
                 logger.exception(f"Result: {result}")
                 return None
 
-            if not isinstance(result.output, SongIdentification):
-                logger.exception(f"Invalid result type for metadata scenario: {type(result.output)}")
-                logger.exception(f"Expected SongIdentification, got: {result.output}")
-                return None
-
             song_result = result.output
             logger.debug(f"Song result with metadata: {song_result}")
 
@@ -310,16 +357,7 @@ class SongIdentifier:
                 return None
 
             # Check confidence threshold
-            if song_result.confidence_score > 0.3:
-                logger.info(
-                    f"Successfully identified song with metadata: '{song_result.song_title}' "
-                    f"by '{song_result.artist_name}' "
-                    f"({song_result.native_language}) - "
-                    f"confidence: {song_result.confidence_score:.2f}"
-                )
-                if not song_result.lyrics_found:
-                    logger.info("No lyrics found in metadata result")
-
+            if song_result.confidence_score > 0.7:
                 return song_result
             else:
                 logger.warning(
@@ -333,7 +371,7 @@ class SongIdentifier:
             return None
 
 
-def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool = False, max_search_results: int = 5, metadata: Optional[dict] = None) -> Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]:
+def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool = False, max_search_results: int = 5, metadata: Optional[dict] = None) -> Optional[Tuple[str, str, str, Optional[str], Optional[str]]]:
     """
     Identify song from ASR transcript with retry mechanism and feedback about previous wrong results.
 
@@ -343,7 +381,7 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
         force_recompute (bool): If True, skip cache and always perform new identification
 
     Returns:
-        Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]: (song_title, artist_name, native_language, lyrics_found, lyrics_content, lyrics_source_url) if identified, None otherwise
+        Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]: (song_title, artist_name, native_language, lyrics_content, lyrics_source_url) if identified, None otherwise
     """
     previous_attempts = []
     result_file_path = str(paths['song_identification'])
@@ -365,7 +403,6 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
                 return (cached_result['song_title'],
                         cached_result['artist_name'],
                         cached_result.get('native_language', ''),
-                        cached_result.get('lyrics_found', False),
                         cached_result.get('lyrics_content', ""),
                         cached_result.get('lyrics_source_url', ""))
 
@@ -379,8 +416,8 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
     else:
         result = identifier.identify_song(transcript)
 
-    if result and result.confidence_score > 0.5:
-        song_info = (result.song_title, result.artist_name, result.native_language, result.lyrics_found, result.lyrics_content, result.lyrics_source_url)
+    if result and result.confidence_score > 0.7:
+        song_info = (result.song_title, result.artist_name, result.native_language, result.lyrics_content, result.lyrics_source_url)
 
         # Save result if file path provided
         if result_file_path:
@@ -395,7 +432,6 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
                     'confidence_score': result.confidence_score,
                     'search_queries_used': result.search_queries_used,
                     'reasoning': result.reasoning,
-                    'lyrics_found': result.lyrics_found,
                     'lyrics_content': result.lyrics_content,
                     'lyrics_source_url': result.lyrics_source_url
                 }
@@ -406,7 +442,7 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
                 logger.info(f"Saved song identification result to: {result_file_path}")
 
                 # Save lyrics to separate file if found
-                if result.lyrics_found and result.lyrics_content:
+                if result.lyrics_content:
                     try:
                         with open(lyrics_file_path, 'w', encoding='utf-8') as f:
                             f.write(result.lyrics_content)
@@ -417,7 +453,7 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
             except Exception as e:
                 logger.warning(f"Failed to save song identification result: {e}")
 
-        logger.info(f"Successfully identified song: '{result.song_title}' by '{result.artist_name}' (lyrics: {'found' if result.lyrics_found else 'not found'})")
+        logger.info(f"Successfully identified song: '{result.song_title}' by '{result.artist_name}' (lyrics: {'found' if result.lyrics_content else 'not found'})")
         return song_info
     else:
         if result:
@@ -446,13 +482,15 @@ def main():
     parser.add_argument('--log-level', default='INFO',
                            choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                            help='Logging level (default: INFO)')
+    parser.add_argument('--logfire', action='store_true',
+                         help='Enable Logfire integration')
 
     args = parser.parse_args()
 
     # Set up logging with Logfire integration
     log_level = getattr(logging, args.log_level.upper())
     from logging_config import setup_logging
-    setup_logging(level=log_level, enable_logfire=True)
+    setup_logging(level=log_level, enable_logfire=args.logfire)
 
     # Get transcript
     transcript = args.transcript
@@ -482,9 +520,9 @@ def main():
     result = identify_song_from_asr(transcript, paths, max_search_results=max_search_results)
 
     if result:
-        song_title, artist_name, native_language, lyrics_found, lyrics_content, lyrics_source_url = result
+        song_title, artist_name, native_language, lyrics_content, lyrics_source_url = result
         print(f"Identified: {song_title} by {artist_name} ({native_language})")
-        if lyrics_found:
+        if lyrics_content:
             print(f"Lyrics file saved")
             if lyrics_source_url:
                 print(f"Lyrics source: {lyrics_source_url}")

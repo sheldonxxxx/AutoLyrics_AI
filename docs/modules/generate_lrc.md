@@ -22,7 +22,7 @@ This module is the core of the Music Lyrics Processing Pipeline, responsible for
 ## Technical Implementation
 
 ### Dependencies
-- **openai**: OpenAI-compatible API client library
+- **pydantic-ai**: Structured LLM interactions for LRC generation
 - **python-dotenv**: Environment variable management
 - **logging_config**: Consistent logging across pipeline
 - **utils**: Shared utility functions for file I/O and validation
@@ -99,7 +99,7 @@ This module is the core of the Music Lyrics Processing Pipeline, responsible for
 ### Processing Steps
 1. **Input Validation**: Validate lyrics and transcript data availability
 2. **Data Preparation**: Convert ASR transcript to LRC-compatible format
-3. **LLM Configuration**: Set up OpenAI-compatible API client
+3. **LLM Configuration**: Set up Pydantic AI agent with OpenAI-compatible API
 4. **Prompt Engineering**: Load specialized LRC generation prompt template
 5. **Content Alignment**: Use LLM to intelligently align lyrics with timestamps
 6. **LRC Formatting**: Ensure proper LRC syntax and structure
@@ -134,10 +134,6 @@ python generate_lrc.py --lyrics-file lyrics.txt --transcript-file transcript.txt
 ### Programmatic Usage
 ```python
 from generate_lrc import generate_lrc_lyrics
-from openai import OpenAI
-
-# Initialize API client
-client = OpenAI(base_url="your-api-url", api_key="your-key")
 
 # Generate LRC content
 lrc_content = generate_lrc_lyrics(

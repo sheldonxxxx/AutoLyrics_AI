@@ -22,6 +22,7 @@ Pipeline Stage: 3/6 (ASR Transcription)
 
 import os
 import logging
+from pathlib import Path
 from logging_config import setup_logging, get_logger
 
 logger = get_logger(__name__)
@@ -78,14 +79,16 @@ def main():
     parser.add_argument('--compute-type', default="int8",
                         help='Type of computation to use for transcription (default: int8)')
     parser.add_argument('--log-level', default='INFO',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                        help='Logging level (default: INFO)')
+                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                         help='Logging level (default: INFO)')
+    parser.add_argument('--logfire', action='store_true',
+                         help='Enable Logfire integration')
 
     args = parser.parse_args()
 
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level, enable_logfire=True)
+    setup_logging(level=log_level, enable_logfire=args.logfire)
 
     # Define the input file path
     input_file = args.file_path
@@ -109,15 +112,19 @@ def main():
         logger.info(f"\nTranscription completed with {len(segments)} segments.")
 
         # Optionally, save the transcription to a file
-        transcript_file = input_file.replace('.wav', '_transcript.txt')
+        transcript_file = str(Path(input_file).with_suffix('.txt'))
+        transcript_word_file = str(Path(input_file).stem + '_word.txt')
         # Create directory if it doesn't exist
         transcript_dir = os.path.dirname(transcript_file)
         if transcript_dir:
             os.makedirs(transcript_dir, exist_ok=True)
 
         with open(transcript_file, 'w', encoding='utf-8') as f:
-            for segment in segments:
-                f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
+            with open(transcript_word_file, 'w', encoding='utf-8') as word_f:
+                for segment in segments:
+                    for word in segment.words:
+                        word_f.write(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.word}\n")
+                    f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
         logger.info(f"Transcription saved to: {transcript_file}")
     else:
         logger.exception("Transcription failed.")

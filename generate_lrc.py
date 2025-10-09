@@ -12,50 +12,40 @@ Key Features:
 - Grammar correction for ASR transcripts
 - Proper LRC format compliance ([mm:ss.xx] timestamps)
 
-Dependencies:
-- openai (API client library)
-- logging_config (pipeline logging)
-- utils (file I/O and validation)
-
 LRC Format: [mm:ss.xx]Lyrics content with precise timing
 
 Pipeline Stage: 5/6 (LRC Generation)
 """
 
 import os
-import json
-import re
-from openai import OpenAI
 from dotenv import load_dotenv
 import logging
 from logging_config import setup_logging, get_logger
-from utils import load_prompt_template, read_lyrics_file, read_transcript_file, convert_transcript_to_lrc, get_openai_config
+from utils import load_prompt_template, read_file, convert_transcript_to_lrc, get_default_llm_config
+from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 logger = get_logger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
 
-
-def generate_lrc_lyrics(client, lyrics_text, asr_transcript, model=None):
+def generate_lrc_lyrics(lyrics_text, asr_transcript):
     """
     Generate LRC format lyrics by combining downloaded lyrics and ASR transcript
     using an LLM.
 
     Args:
-        client: OpenAI client instance
         lyrics_text (str): Downloaded lyrics text
         asr_transcript (str): ASR transcript with timestamps
+        model (str): Model name to use for generation
 
     Returns:
         str: LRC formatted lyrics
     """
     # Convert ASR transcript to LRC format for better alignment
     lrc_transcript = convert_transcript_to_lrc(asr_transcript)
-
-    if model is None:
-        logger.exception("Model parameter is required")
-        return None
 
     # Load prompt template from file
     prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "lrc_generation_prompt.txt")
@@ -67,43 +57,57 @@ def generate_lrc_lyrics(client, lyrics_text, asr_transcript, model=None):
 
     # Format the prompt with actual data
     prompt = prompt_template.format(lyrics_text=lyrics_text, lrc_transcript=lrc_transcript)
-    
+
     try:
-        response = client.chat.completions.create(
-            model=model,  # Use model from environment variable
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            extra_body={"enable_thinking": False},
-            temperature=0.1,  # Low temperature for more consistent output
-            # max_tokens=4000
+        # Get configuration for pydantic_ai
+        config = get_default_llm_config()
+
+        # Create OpenAI provider with custom configuration
+        openai_provider = OpenAIProvider(
+            base_url=config["OPENAI_BASE_URL"],
+            api_key=config["OPENAI_API_KEY"]
         )
-        
-        return response.choices[0].message.content.strip()
+
+        # Create OpenAI model with the provider
+        openai_model = OpenAIChatModel(
+            config["OPENAI_MODEL"],
+            provider=openai_provider
+        )
+
+        # Create Pydantic AI agent for LRC generation
+        agent = Agent(
+            openai_model,
+            retries=3
+        )
+
+        # Use the agent to generate LRC
+        result = agent.run_sync(prompt)
+
+        if result and result.output:
+            return result.output.strip()
+        else:
+            logger.exception("No result returned from LRC generation agent")
+            return None
 
     except Exception as e:
         logger.exception(f"Error generating LRC lyrics: {e}")
         return None
 
 
-def correct_grammar_in_transcript(client, asr_transcript, filename=None, model=None):
+def correct_grammar_in_transcript(asr_transcript, filename=None):
     """
     Correct grammatical errors in ASR transcript using an LLM.
 
     Args:
-        client: OpenAI client instance
         asr_transcript (str): Raw ASR transcript that may contain grammatical errors
         filename (str, optional): Original audio filename for context
+        model (str): Model name to use for correction
 
     Returns:
         str: Grammatically corrected transcript
     """
-    if model is None:
-        logger.exception("Model parameter is required")
-        return asr_transcript  # Return original if model not provided
+    
+    lrc_transcript = convert_transcript_to_lrc(asr_transcript)
 
     # Load prompt template from file
     prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "grammatical_correction_prompt.txt")
@@ -111,26 +115,43 @@ def correct_grammar_in_transcript(client, asr_transcript, filename=None, model=N
 
     if not prompt_template:
         logger.exception("Failed to load grammatical correction prompt template")
-        return asr_transcript  # Return original if prompt loading fails
+        return lrc_transcript  # Return original if prompt loading fails
 
     # Format the prompt with actual data
-    prompt = prompt_template.format(asr_transcript=asr_transcript, filename=filename or "Unknown")
+    prompt = prompt_template.format(asr_transcript=lrc_transcript, filename=filename or "Unknown")
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.1,  # Low temperature for consistent corrections
+        # Get configuration for pydantic_ai
+        config = get_default_llm_config()
+
+        # Create OpenAI provider with custom configuration
+        openai_provider = OpenAIProvider(
+            base_url=config["OPENAI_BASE_URL"],
+            api_key=config["OPENAI_API_KEY"]
         )
 
-        corrected_transcript = response.choices[0].message.content.strip()
-        logger.info("Grammatical correction completed successfully")
-        return corrected_transcript
+        # Create OpenAI model with the provider
+        openai_model = OpenAIChatModel(
+            config["OPENAI_MODEL"],
+            provider=openai_provider
+        )
+
+        # Create Pydantic AI agent for grammar correction
+        agent = Agent(
+            openai_model,
+            retries=3
+        )
+
+        # Use the agent to correct grammar
+        result = agent.run_sync(prompt)
+
+        if result and result.output:
+            corrected_transcript = result.output.strip()
+            logger.info("Grammatical correction completed successfully")
+            return corrected_transcript
+        else:
+            logger.exception("No result returned from grammar correction agent")
+            return asr_transcript
 
     except Exception as e:
         logger.exception(f"Error correcting grammar in transcript: {e}")
@@ -139,7 +160,7 @@ def correct_grammar_in_transcript(client, asr_transcript, filename=None, model=N
 def main():
     # Set up argument parser
     import argparse
-    parser = argparse.ArgumentParser(description='Generate LRC format lyrics by combining downloaded lyrics and ASR output using an OpenAI-compatible API.')
+    parser = argparse.ArgumentParser(description='Generate LRC format lyrics by combining downloaded lyrics and ASR output using an OpenAI-compatible API via Pydantic AI.')
     parser.add_argument('--lyrics-file', '-l',
                         help='Path to the lyrics file')
     parser.add_argument('--transcript-file', '-t',
@@ -147,23 +168,16 @@ def main():
     parser.add_argument('--output', '-o',
                         help='Output LRC file path')
     parser.add_argument('--log-level', default='INFO',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                        help='Logging level (default: INFO)')
+                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                         help='Logging level (default: INFO)')
+    parser.add_argument('--logfire', action='store_true',
+                         help='Enable Logfire integration')
     
     args = parser.parse_args()
     
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
-    setup_logging(level=log_level, enable_logfire=True)
-    
-    # Get OpenAI configuration using utility function
-    config = get_openai_config()
-
-    # Initialize the OpenAI client with the custom base URL
-    client = OpenAI(
-        base_url=config["OPENAI_BASE_URL"],
-        api_key=config["OPENAI_API_KEY"]
-    )
+    setup_logging(level=log_level, enable_logfire=args.logfire)
     
     # Define file paths
     lyrics_file_path = args.lyrics_file
@@ -182,13 +196,13 @@ def main():
     logger.info("Reading lyrics and transcript files...")
     
     # Read the lyrics and transcript
-    lyrics_text = read_lyrics_file(lyrics_file_path)
-    asr_transcript = read_transcript_file(transcript_file_path)
+    lyrics_text = read_file(lyrics_file_path)
+    asr_transcript = read_file(transcript_file_path)
     
     logger.info("Generating LRC formatted lyrics...")
     
     # Generate the LRC lyrics
-    lrc_lyrics = generate_lrc_lyrics(client, lyrics_text, asr_transcript, config["OPENAI_MODEL"])
+    lrc_lyrics = generate_lrc_lyrics(lyrics_text, asr_transcript)
     
     if lrc_lyrics:
         logger.info("LRC lyrics generated successfully!")
