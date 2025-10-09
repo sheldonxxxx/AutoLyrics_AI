@@ -110,6 +110,7 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
 
     return {
         'vocals_wav': song_folder / f"{filename_stem}_vocal.wav",
+        'normalized_vocals_wav': song_folder / f"{filename_stem}_vocal_normalized.wav",
         'transcript_txt': song_folder / f"{filename_stem}_transcript.txt",
         'transcript_word_txt': song_folder / f"{filename_stem}_transcript_word.txt",
         'corrected_transcript_txt': song_folder / f"{filename_stem}_corrected_transcript.txt",
@@ -301,9 +302,6 @@ def remove_timestamps_from_transcript(transcript: str) -> str:
     cleaned_transcript = transcript
     for pattern in patterns:
         cleaned_transcript = re.sub(pattern, '', cleaned_transcript, flags=re.MULTILINE)
-
-    # Remove extra whitespace and normalize
-    cleaned_transcript = re.sub(r'\s+', ' ', cleaned_transcript).strip()
 
     logger.debug(f"Removed timestamps from transcript: {len(transcript)} -> {len(cleaned_transcript)} characters")
     return cleaned_transcript

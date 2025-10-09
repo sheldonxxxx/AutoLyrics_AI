@@ -24,6 +24,8 @@ import os
 import logging
 from pathlib import Path
 from logging_config import setup_logging, get_logger
+from faster_whisper import WhisperModel
+from ffmpeg_normalize import FFmpegNormalize
 
 logger = get_logger(__name__)
 
@@ -42,11 +44,9 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
     """
     logger = get_logger(__name__)
     try:
-        from faster_whisper import WhisperModel
 
         # Load the model
         model = WhisperModel(model_size, device=device, compute_type=compute_type)
-
 
         # Transcribe the audio with word-level timestamps
         segments, _ = model.transcribe(audio_file_path, beam_size=5, word_timestamps=True)
@@ -66,12 +66,65 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         logger.exception(f"Error during transcription: {e}")
         return []
 
+
+def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
+    """
+    Normalize audio file to 48kHz WAV format using FFmpegNormalize.
+
+    Args:
+        audio_path (Path): Path to the input audio file
+        normalized_path (Path): Path for the normalized output file
+
+    Returns:
+        bool: True if normalization was successful, False otherwise
+    """
+    logger = get_logger(__name__)
+
+    try:
+        # Create output directory if it doesn't exist
+        normalized_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Initialize FFmpegNormalize with specified parameters
+        normalizer = FFmpegNormalize(
+            output_format='wav',
+            sample_rate=48000,
+            progress=logger.level <= logging.DEBUG,
+            keep_lra_above_loudness_range_target=True
+        )
+
+        # Add the audio file for normalization
+        normalizer.add_media_file(str(audio_path), str(normalized_path))
+
+        # Run normalization
+        logger.info(f"Normalizing audio: {audio_path} -> {normalized_path}")
+        normalizer.run_normalization()
+
+        # Check if normalized file was created successfully
+        if normalized_path.exists():
+            logger.info(f"Audio normalization completed successfully: {normalized_path}")
+            return True
+        else:
+            logger.error(f"Normalization failed - output file not found: {normalized_path}")
+            return False
+
+    except ImportError:
+        logger.exception("ffmpeg-normalize is not installed. Please install it with: pip install ffmpeg-normalize")
+        return False
+    except Exception as e:
+        logger.exception(f"Error during audio normalization: {e}")
+        return False
+
+
 def main():
     # Set up argument parser
     import argparse
     parser = argparse.ArgumentParser(description='Transcribe vocals with timestamped transcription using faster-whisper.')
     parser.add_argument('file_path', nargs='?',
                         help='Path to the input audio file')
+    parser.add_argument('--output_dir', '-o',
+                        help='Path for the normalized output file (if normalization is enabled)')
+    parser.add_argument('--normalize', action='store_true',
+                        help='Enable audio normalization to 48kHz WAV before transcription')
     parser.add_argument('--model', default="large-v3",
                         help='Whisper model size to use for transcription (default: large-v3)')
     parser.add_argument('--device', default="cpu",
@@ -91,18 +144,36 @@ def main():
     setup_logging(level=log_level, enable_logfire=args.logfire)
 
     # Define the input file path
-    input_file = args.file_path
+    input_file = Path(args.file_path)
 
     # Check if the input file exists
-    if not os.path.exists(input_file):
+    if not input_file.exists():
         logger.exception(f"Input file does not exist: {input_file}")
         return
 
     logger.info(f"Starting transcription for: {input_file}")
+    
+    # Create output directory if it doesn't exist
+    if args.output_dir:
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+        output_dir = Path(args.output_dir)
+    else:
+        output_dir = Path(input_file).parent
+
+    # Handle normalization if requested
+    audio_file_to_transcribe = input_file
+    if args.normalize:
+        output_path = output_dir / Path(input_file.stem + '_normalized.wav')
+        if not normalize_audio(Path(input_file), output_path):
+            logger.exception("Audio normalization failed")
+            return
+
+        audio_file_to_transcribe = str(output_path)
+        logger.info(f"Using normalized audio file for transcription: {audio_file_to_transcribe}")
 
     # Transcribe the vocals with timestamps
     segments = transcribe_with_timestamps(
-        input_file,
+        audio_file_to_transcribe,
         model_size=args.model,
         device=args.device,
         compute_type=args.compute_type
@@ -112,8 +183,8 @@ def main():
         logger.info(f"\nTranscription completed with {len(segments)} segments.")
 
         # Optionally, save the transcription to a file
-        transcript_file = str(Path(input_file).with_suffix('.txt'))
-        transcript_word_file = str(Path(input_file).stem + '_word.txt')
+        transcript_file = str(output_dir / Path(input_file.stem + '_transcript.txt'))
+        transcript_word_file = str(output_dir / Path(input_file.stem + '_transcript_word.txt'))
         # Create directory if it doesn't exist
         transcript_dir = os.path.dirname(transcript_file)
         if transcript_dir:

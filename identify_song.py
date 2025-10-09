@@ -243,7 +243,7 @@ class SongIdentifier:
 
             # Format the prompt with cleaned transcript and JSON schema
             user_prompt = prompt_template.format(
-                transcript=cleaned_transcript[:2000],  # Limit and clean input
+                transcript=cleaned_transcript,  # Limit and clean input
                 json_schema=json.dumps(json_schema, indent=2)
             )
             logger.debug(f"Generated prompt length: {len(user_prompt)}")

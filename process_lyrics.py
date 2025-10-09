@@ -36,7 +36,7 @@ from typing import Dict, List, Optional, Tuple
 from logging_config import setup_logging, get_logger
 from extract_metadata import extract_metadata
 from separate_vocals import separate_vocals
-from transcribe_vocals import transcribe_with_timestamps
+from transcribe_vocals import transcribe_with_timestamps, normalize_audio
 from generate_lrc import read_file, generate_lrc_lyrics, correct_grammar_in_transcript
 from translate_lrc import translate_lrc_content
 from identify_song import identify_song_from_asr
@@ -183,7 +183,6 @@ def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: P
             results.vocals_separation_success = True
             results.vocals_file_path = vocals_file
             results.vocals_file_size = Path(vocals_file).stat().st_size
-            logger.info(f"Vocals separated successfully: {vocals_file}")
             return True
         else:
             results.vocals_separation_success = False
@@ -199,10 +198,11 @@ def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: P
 
 
 def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results: ProcessingResults) -> Optional[List[SimpleNamespace]]:
-    """Step 3: Transcribe vocals with ASR and timestamps."""
+    """Step 3: Normalize vocals and transcribe with ASR and timestamps."""
     transcript_path = paths['transcript_txt']
-    
-    logger.info("Step 3: Transcribing vocals with ASR...")
+    normalized_vocals_path = paths['normalized_vocals_wav']
+
+    logger.info("Step 3: Normalizing vocals and transcribing with ASR...")
 
     if resume and transcript_path.exists():
         logger.info(f"ASR transcript already exists for {vocals_file}, skipping ASR...")
@@ -211,7 +211,20 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
         return parse_transcript_segments(transcript_content)
 
     try:
-        segments = transcribe_with_timestamps(vocals_file)
+        # Step 3a: Normalize vocals to 48kHz WAV format
+        logger.info(f"Normalizing vocals: {vocals_file}")
+        vocals_path = Path(vocals_file)
+        normalized_path = Path(normalized_vocals_path)
+
+        if not normalize_audio(vocals_path, normalized_path):
+            logger.error(f"Failed to normalize vocals: {vocals_file}")
+            results.transcription_success = False
+            results.error_message = "Audio normalization failed"
+            return None
+
+        # Step 3b: Transcribe the normalized vocals
+        logger.info(f"Transcribing normalized vocals: {normalized_path}")
+        segments = transcribe_with_timestamps(str(normalized_path))
         if segments:
             results.transcription_success = True
             results.transcription_segments_count = len(segments)

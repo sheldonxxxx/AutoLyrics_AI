@@ -453,6 +453,18 @@ wheels = [
 ]
 
 [[package]]
+name = "colorlog"
+version = "6.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/6b/4e5481ddcdb9c255b2715f54c863629f1543e97bc8c309d1c5c131ad14f2/colorlog-6.7.0.tar.gz", hash = "sha256:bd94bd21c1e13fac7bd3153f4bc3a7dc0eb0974b8bc2fdf1a989e474f6e582e5", size = 29920, upload-time = "2022-08-29T14:51:27.945Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/43/a363c213224448f9e194d626221123ce00e3fb3d87c0c22aed52b620bdd1/colorlog-6.7.0-py2.py3-none-any.whl", hash = "sha256:0d33ca236784a1ba3ff9c532d4964126d8a2c44f1f0cb1d2b0728196f512f662", size = 11286, upload-time = "2022-08-29T14:51:26.426Z" },
+]
+
+[[package]]
 name = "ctranslate2"
 version = "4.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -611,6 +623,34 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/77/c2/72002e5f80e73941de05f7b4347ea183d29f76768978a04acda68401c931/faster-whisper-1.2.0.tar.gz", hash = "sha256:56b20d616a575049a79f33b04f02db0868ce38c5d057a0b816d36ca59a6d2598", size = 1124896, upload-time = "2025-08-06T00:34:10.878Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/6d/64cdc135e4195f9473c2e42aa1d2268654be4c289223828eee8e6ba4fc6d/faster_whisper-1.2.0-py3-none-any.whl", hash = "sha256:e5535628fe93b5123029b410fd8edba2d28f8cee9f8fff8119138e5a9d81afbe", size = 1118581, upload-time = "2025-08-06T00:34:09.476Z" },
+]
+
+[[package]]
+name = "ffmpeg-normalize"
+version = "1.33.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorlog" },
+    { name = "ffmpeg-progress-yield" },
+    { name = "mutagen" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/46/be/df2c031113838b0304f0a1e5b4d51e8c174571cc360e78a6626a54b1a7e0/ffmpeg_normalize-1.33.1.tar.gz", hash = "sha256:355204683459dc7b10755db0e1cb883312c03946188420b0cf671569e3c2042b", size = 23704, upload-time = "2025-09-01T07:29:40.015Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/e2/318ed0c28ef55662b36bdf497b9bdff3bbe092258ade9b1917a9e6d92aa4/ffmpeg_normalize-1.33.1-py3-none-any.whl", hash = "sha256:89d17ba804746f2b085054e84d40b124bf9714ef2513d12ee52df7ad5d77d073", size = 28584, upload-time = "2025-09-01T07:29:38.595Z" },
+]
+
+[[package]]
+name = "ffmpeg-progress-yield"
+version = "1.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a6/25/90c4439e11411402080718167121f717da453b48881feb0c615005102d59/ffmpeg_progress_yield-1.0.3.tar.gz", hash = "sha256:5cfa5d903bd8a0052f0bdc35ce2bc848851665f7eb193f7dc5ad6df1c09bf860", size = 9788, upload-time = "2025-09-01T07:17:38.136Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/30/019e14676181bcccaab4c259a9c5ab0b5e063e3ce1b294b7847a26e91c0c/ffmpeg_progress_yield-1.0.3-py3-none-any.whl", hash = "sha256:882e53d253c6503843a3288c4d536cf95630d51d5767aa9218302d16ef6c5852", size = 12484, upload-time = "2025-09-01T07:17:36.878Z" },
 ]
 
 [[package]]
@@ -1314,6 +1354,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "audio-separator", extra = ["cpu"] },
     { name = "faster-whisper" },
+    { name = "ffmpeg-normalize" },
     { name = "logfire" },
     { name = "mutagen" },
     { name = "pydantic" },
@@ -1326,6 +1367,7 @@ dependencies = [
 requires-dist = [
     { name = "audio-separator", extras = ["cpu"], specifier = ">=0.39.0" },
     { name = "faster-whisper", specifier = ">=1.2.0" },
+    { name = "ffmpeg-normalize", specifier = ">=1.33.1" },
     { name = "logfire", specifier = ">=4.11.0" },
     { name = "mutagen", specifier = ">=1.47.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
