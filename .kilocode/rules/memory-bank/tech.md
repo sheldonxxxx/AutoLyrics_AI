@@ -12,10 +12,6 @@ Modern Python version providing latest language features and performance improve
 ### Metadata Extraction
 - **mutagen**: Audio metadata extraction with multiple format support
 
-### Web Scraping
-- **requests**: HTTP requests to lyric websites
-- **beautifulsoup4**: HTML parsing for lyric extraction from uta-net.com
-
 ### API Integration
 - **Pydantic AI**: Structured LLM interactions for LRC generation and translation
 - **python-dotenv**: Environment variable management
@@ -58,7 +54,6 @@ Modern Python version providing latest language features and performance improve
 
 ### Core Dependencies
 - audio-separator[cpu]>=0.39.0
-- beautifulsoup4>=4.14.2
 - faster-whisper>=1.2.0
 - mutagen>=1.47.0
 - pydantic-ai>=1.0.15

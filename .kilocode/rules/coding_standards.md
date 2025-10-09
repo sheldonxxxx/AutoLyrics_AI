@@ -235,7 +235,7 @@ def main():
 
 ```bash
 # ✅ Correct - Add new dependencies
-uv add requests>=2.32.0 beautifulsoup4>=4.14.0
+uv add requests>=2.32.0
 
 # ✅ Correct - Remove dependencies
 uv remove unused-package
