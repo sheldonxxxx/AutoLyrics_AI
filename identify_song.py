@@ -137,7 +137,7 @@ class SongIdentification(BaseModel):
     native_language: str = Field(description="The native language of the song (e.g., 'Japanese', 'English', 'Korean')")
     search_queries_used: List[str] = Field(description="List of search queries that were used")
     reasoning: str = Field(description="Explanation of how the identification was made")
-    lyrics_content: Optional[str] = Field(description="The extracted lyrics content if found, None otherwise")
+    lyrics_content: Optional[str] = Field(description="The complete lyrics content if found, None otherwise")
     lyrics_source_url: Optional[str] = Field(description="The URL where the lyrics were obtained from, if found")
     asr_content_weird: bool = Field(description="True if ASR transcript content seems unrelated to music/song lyrics, False otherwise")
 

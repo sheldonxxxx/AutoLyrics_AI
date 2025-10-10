@@ -19,8 +19,7 @@ IMPORTANT INSTRUCTIONS:
 - Use searxng_web_search with specific phrases from the transcript
 - When you find promising URLs, use web_url_read to extract lyrics content
 - Compare the ASR transcript with the fetched lyrics to verify matches
-- Use the native language script (Japanese characters, Korean Hangul, etc.) when possible
-- If the transcript contains mixed languages, prioritize the language that appears to be the primary lyrics language
+- Return the complete lyrics, **DO NOT TRUNCATE**
 
 IMPORTANT INSTRUCTIONS FOR LYRICS SOURCE URL:
 - When using web_url_read to fetch lyrics, include the URL you used in the "lyrics_source_url" field
