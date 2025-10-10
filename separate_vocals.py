@@ -48,7 +48,7 @@ def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str =
     os.makedirs(model_dir, exist_ok=True)
     
     # Initialize the separator with CPU (since we're using the CPU version)
-    separator = Separator(log_level=logging.INFO,
+    separator = Separator(log_level=logging.WARNING,
                           model_file_dir=model_dir,
                           output_dir=vocals_output_path.parent,
                           output_single_stem="Vocals")  # Only output the vocals stem
