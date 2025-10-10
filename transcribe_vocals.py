@@ -49,7 +49,11 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         model = WhisperModel(model_size, device=device, compute_type=compute_type)
 
         # Transcribe the audio with word-level timestamps
-        segments, _ = model.transcribe(audio_file_path, beam_size=5, word_timestamps=True)
+        segments, _ = model.transcribe(audio_file_path, 
+                                       beam_size=5,
+                                       word_timestamps=True, 
+                                       condition_on_previous_text=False
+                                    )
 
         # # Convert segments to a list to force transcription
         segment_list = list(segments)
