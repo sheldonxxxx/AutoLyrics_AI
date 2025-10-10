@@ -434,8 +434,7 @@ def process_single_audio_file(
             return False, results.to_dict()
 
         # Step 3: Transcribe vocals with ASR and timestamps
-        status = transcribe_vocals_step(results.vocals_file_path, paths, resume, results)
-        if not status:
+        if not transcribe_vocals_step(results.vocals_file_path, paths, resume, results):
             results.finalize()
             return False, results.to_dict()
 
@@ -446,7 +445,7 @@ def process_single_audio_file(
             transcript_content = read_file(transcript_path)
         except Exception as e:
             logger.warning(f"Could not read transcript file for song identification: {e}", exc_info=True)
-
+            
         # Step 4: Identify song and search for lyrics using LLM
         lyrics_content = identify_and_search_lyrics_step(
             {
@@ -462,6 +461,12 @@ def process_single_audio_file(
             results,
             transcript_content
         )
+        
+        # If no lyrics found, will skip for now
+        # TODO: Consider using grammatically corrected transcript if no lyrics found
+        if not lyrics_content:
+            results.finalize()
+            return False, results.to_dict()
 
         # Step 5: Generate LRC file
         transcript_path = str(paths['transcript_word_txt'])

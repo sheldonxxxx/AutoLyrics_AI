@@ -139,6 +139,7 @@ class SongIdentification(BaseModel):
     reasoning: str = Field(description="Explanation of how the identification was made")
     lyrics_content: Optional[str] = Field(description="The extracted lyrics content if found, None otherwise")
     lyrics_source_url: Optional[str] = Field(description="The URL where the lyrics were obtained from, if found")
+    asr_content_weird: bool = Field(description="True if ASR transcript content seems unrelated to music/song lyrics, False otherwise")
 
 class SongIdentifier:
     """Class to identify songs from ASR transcripts using LLM and web search."""
@@ -260,6 +261,11 @@ class SongIdentifier:
             song_result = result.output
             logger.debug(f"Song result: {song_result}")
 
+            # Check if ASR content is weird/unrelated first
+            if song_result.asr_content_weird:
+                logger.warning("ASR content detected as weird/unrelated to music - skipping song identification")
+                return None
+
             # Validate required fields
             if not song_result.song_title or not song_result.artist_name:
                 logger.warning("Missing song title or artist name in result")
@@ -354,6 +360,11 @@ class SongIdentifier:
 
             song_result = result.output
             logger.debug(f"Song result with metadata: {song_result}")
+
+            # Check if ASR content is weird/unrelated first
+            if getattr(song_result, 'asr_content_weird', False):
+                logger.warning("ASR content detected as weird/unrelated to music - skipping song identification")
+                return None
 
             # Validate required fields
             if not song_result.song_title or not song_result.artist_name:
