@@ -27,7 +27,7 @@ from logging_config import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
-def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str ="UVR_MDXNET_Main.onnx"):
+def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str ="htdemucs_ft.yaml"):
     """
     Separate vocals from an audio file using audio-separator.
 

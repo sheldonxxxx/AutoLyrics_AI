@@ -52,7 +52,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         segments, _ = model.transcribe(audio_file_path, 
                                        beam_size=5,
                                        word_timestamps=True, 
-                                       condition_on_previous_text=False
+                                       condition_on_previous_text=False,
                                     )
 
         # # Convert segments to a list to force transcription

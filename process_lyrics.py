@@ -214,17 +214,18 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
         # Step 3a: Normalize vocals to 48kHz WAV format
         logger.info(f"Normalizing vocals: {vocals_file}")
         vocals_path = Path(vocals_file)
-        normalized_path = Path(normalized_vocals_path)
+        # normalized_path = Path(normalized_vocals_path)
 
-        if not normalize_audio(vocals_path, normalized_path):
-            logger.error(f"Failed to normalize vocals: {vocals_file}")
-            results.transcription_success = False
-            results.error_message = "Audio normalization failed"
-            return None
+        # if not normalize_audio(vocals_path, normalized_path):
+        #     logger.error(f"Failed to normalize vocals: {vocals_file}")
+        #     results.transcription_success = False
+        #     results.error_message = "Audio normalization failed"
+        #     return None
 
         # Step 3b: Transcribe the normalized vocals
-        logger.info(f"Transcribing normalized vocals: {normalized_path}")
-        segments = transcribe_with_timestamps(str(normalized_path))
+        # logger.info(f"Transcribing normalized vocals: {normalized_path}")
+        logger.info(f"Transcribing normalized vocals: {vocals_path}")
+        segments = transcribe_with_timestamps(str(vocals_path))
         if segments:
             results.transcription_success = True
             results.transcription_segments_count = len(segments)
