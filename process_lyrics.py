@@ -378,9 +378,24 @@ def translate_lrc_step(lrc_path: str, paths: dict, target_language: str, resume:
             logger.info("Translated LRC content validation passed")
         else:
             logger.warning("Translated LRC content validation failed, but saving anyway")
-            
-        # Save the translated LRC to a file
-        write_file(str(translated_lrc_path), translated_lrc_content)
+
+        # Add metadata tags at the beginning of the final LRC content
+        metadata_tags = []
+        if results.metadata_title:
+            metadata_tags.append(f"[ti:{results.metadata_title}]")
+        if results.metadata_artist:
+            metadata_tags.append(f"[ar:{results.metadata_artist}]")
+        if results.metadata_album:
+            metadata_tags.append(f"[al:{results.metadata_album}]")
+
+        # Combine metadata tags with translated LRC content
+        if metadata_tags:
+            final_lrc_content = "\n".join(metadata_tags) + "\n\n" + translated_lrc_content
+        else:
+            final_lrc_content = translated_lrc_content
+
+        # Save the final LRC with metadata to file
+        write_file(str(translated_lrc_path), final_lrc_content)
             
         results.translation_success = True
         results.overall_success = True
