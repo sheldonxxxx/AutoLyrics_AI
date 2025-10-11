@@ -24,7 +24,7 @@ Processing: Sequential per file, parallel across pipeline stages
 
 import os
 import sys
-import re
+import json
 from pathlib import Path
 import logging
 import argparse
@@ -440,6 +440,24 @@ def process_single_audio_file(
     
     if paths['translated_lrc'].exists() and resume:
         logger.info(f"Final LRC file already exists for {input_file}, skipping processing...")
+        # Read song name and artist from tmp JSON file for CSV reporting
+        json_file_path = paths['song_identification']
+        if json_file_path.exists():
+            try:
+                with open(json_file_path, 'r', encoding='utf-8') as f:
+                    json_data = json.load(f)
+
+                # Update results with data from JSON file
+                results.metadata_title = json_data.get('song_title', '')
+                results.metadata_artist = json_data.get('artist_name', '')
+                results.metadata_success = True
+
+                logger.info(f"Loaded song info from JSON: {results.metadata_title} - {results.metadata_artist}")
+
+            except Exception as e:
+                logger.warning(f"Failed to read song identification JSON file: {e}")
+                # Continue with empty metadata
+
         results.overall_success = True
         results.finalize()
         return True, results.to_dict()
