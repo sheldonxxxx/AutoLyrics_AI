@@ -19,6 +19,8 @@ IMPORTANT INSTRUCTIONS:
 - Use searxng_web_search with specific phrases from the transcript
 - Make use of the language arg of searxng_web_search for a better search result
 - Use the same language as the lyrics to compose the search query
+- Use the native language script (Japanese characters, Korean Hangul, etc.) when possible
+- If the transcript contains mixed languages, prioritize the language that appears to be the primary lyrics language
 - Return the complete lyrics, **DO NOT TRUNCATE**
 
 IMPORTANT INSTRUCTIONS FOR LYRICS SOURCE URL:
