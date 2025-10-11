@@ -423,7 +423,7 @@ def process_single_audio_file(
     # Get output file paths (preserving nested folder structure)
     paths = get_output_paths(input_file, output_dir, temp_dir, input_dir)
     
-    if paths['lrc'].exists() and resume:
+    if paths['translated_lrc'].exists() and resume:
         logger.info(f"Final LRC file already exists for {input_file}, skipping processing...")
         results.overall_success = True
         results.finalize()
