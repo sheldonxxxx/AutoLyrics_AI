@@ -11,17 +11,16 @@ Here is the ASR transcript of the song vocals for verification:
 
 Your task is to:
 1. Use searxng_web_search MCP tool to search for lyrics using the title and artist
-2. Use web_url_read MCP tool to fetch lyrics from promising URLs
-3. Verify that the fetched lyrics match the ASR transcript content
-4. Determine the native language of the song from the lyrics
+2. Determine the native language of the song
+3. Use web_url_read MCP tool to fetch lyrics from promising URLs
+4. Verify that the fetched lyrics match the ASR transcript content
 5. Provide a confidence score for the lyrics match
 6. Include the fetched lyrics in your response if they match the transcript
 
 IMPORTANT INSTRUCTIONS:
 - Use the exact title and artist provided for your search queries
-- Look for lyrics that match phrases and content from the ASR transcript
-- When you find promising URLs, use web_url_read to extract lyrics content
-- Compare the ASR transcript with the fetched lyrics to verify matches
+- Make use of the language arg of searxng_web_search for a better search result
+- Use the same language as the lyrics to compose the search query
 - Return the complete lyrics, **DO NOT TRUNCATE**
 
 IMPORTANT INSTRUCTIONS FOR LYRICS SOURCE URL:
