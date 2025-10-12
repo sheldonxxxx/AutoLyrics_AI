@@ -139,8 +139,6 @@ class SongIdentification(BaseModel):
     reasoning: str = Field(description="Explanation of how the identification was made")
     lyrics_content: Optional[str] = Field(description="The complete lyrics content if found, None otherwise")
     lyrics_source_url: Optional[str] = Field(description="The URL where the lyrics were obtained from, if found")
-    asr_content_weird: bool = Field(description="True if ASR transcript content seems unrelated to music/song lyrics, False otherwise")
-
 class SongIdentifier:
     """Class to identify songs from ASR transcripts using LLM and web search."""
 
@@ -261,11 +259,6 @@ class SongIdentifier:
             song_result = result.output
             logger.debug(f"Song result: {song_result}")
 
-            # Check if ASR content is weird/unrelated first
-            if song_result.asr_content_weird:
-                logger.warning("ASR content detected as weird/unrelated to music - skipping song identification")
-                return None
-
             # Validate required fields
             if not song_result.song_title or not song_result.artist_name:
                 logger.warning("Missing song title or artist name in result")
@@ -362,8 +355,8 @@ class SongIdentifier:
             logger.debug(f"Song result with metadata: {song_result}")
 
             # Check if ASR content is weird/unrelated first
-            if getattr(song_result, 'asr_content_weird', False):
-                logger.warning("ASR content detected as weird/unrelated to music - skipping song identification")
+            if getattr(song_result, 'reject_asr_content', False):
+                logger.warning("ASR content was rejected - skipping song identification")
                 return None
 
             # Validate required fields
@@ -404,7 +397,6 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
     Returns:
         Optional[Tuple[str, str, str, bool, Optional[str], Optional[str]]]: (song_title, artist_name, native_language, lyrics_content, lyrics_source_url) if identified, None otherwise
     """
-    previous_attempts = []
     result_file_path = str(paths['song_identification'])
     lyrics_file_path = str(paths.get('lyrics_file', result_file_path.replace('.json', '_lyrics.txt')))
 
@@ -454,7 +446,8 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
                     'search_queries_used': result.search_queries_used,
                     'reasoning': result.reasoning,
                     'lyrics_content': result.lyrics_content,
-                    'lyrics_source_url': result.lyrics_source_url
+                    'lyrics_source_url': result.lyrics_source_url,
+                    'native_language': result.native_language
                 }
 
                 with open(result_file_path, 'w', encoding='utf-8') as f:
@@ -479,12 +472,6 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
     else:
         if result:
             logger.warning(f"Low confidence identification: {result.confidence_score:.2f} for '{result.song_title}' by '{result.artist_name}'")
-            previous_attempts.append({
-                'song_title': result.song_title,
-                'artist_name': result.artist_name,
-                'confidence': result.confidence_score,
-                'reasoning': result.reasoning
-            })
         else:
             logger.warning(f"No identification result")
 

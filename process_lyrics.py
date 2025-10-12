@@ -36,8 +36,9 @@ from typing import Dict, List, Optional, Tuple
 from logging_config import setup_logging, get_logger
 from extract_metadata import extract_metadata
 from separate_vocals import separate_vocals
-from transcribe_vocals_cpp import transcribe_with_timestamps, normalize_audio
+from transcribe_vocals_stable import transcribe_with_timestamps, normalize_audio
 from generate_lrc import read_file, generate_lrc_lyrics, correct_grammar_in_transcript
+from verify_and_correct_timestamps import verify_and_correct_timestamps
 from translate_lrc import translate_lrc_content
 from identify_song import identify_song_from_asr
 from utils import (
@@ -88,6 +89,10 @@ class ProcessingResults:
         self.lrc_line_count = 0
         self.lrc_has_timestamps = False
 
+        self.timestamp_verification_success = False
+        self.timestamp_corrections_applied = 0
+        self.corrected_lrc_path = ''
+
         self.translation_success = False
         self.translation_target_language = 'Traditional Chinese'
 
@@ -123,6 +128,9 @@ class ProcessingResults:
             'lrc_generation_success': self.lrc_generation_success,
             'lrc_line_count': self.lrc_line_count,
             'lrc_has_timestamps': self.lrc_has_timestamps,
+            'timestamp_verification_success': self.timestamp_verification_success,
+            'timestamp_corrections_applied': self.timestamp_corrections_applied,
+            'corrected_lrc_path': self.corrected_lrc_path,
             'translation_success': self.translation_success,
             'translation_target_language': self.translation_target_language,
             'overall_success': self.overall_success,
@@ -356,6 +364,67 @@ def generate_lrc_step(lyrics_content: Optional[str], corrected_transcript_conten
     return True
 
 
+def verify_and_correct_timestamps_step(lrc_path: str, transcript_path: str, paths: dict, resume: bool, results: ProcessingResults) -> bool:
+    """Step 5.5: Verify and correct LRC timestamps using ASR transcript."""
+    corrected_lrc_path = paths['corrected_lrc']
+
+    logger.info("Step 5.5: Verifying and correcting LRC timestamps...")
+
+    if resume and corrected_lrc_path.exists():
+        logger.info(f"Corrected LRC file already exists, skipping timestamp verification...")
+        results.timestamp_verification_success = True
+        results.corrected_lrc_path = str(corrected_lrc_path)
+        return True
+
+    try:
+        # Read the current LRC content
+        lrc_content = read_file(lrc_path)
+        if not lrc_content:
+            results.timestamp_verification_success = False
+            results.error_message = "Could not read LRC file for timestamp verification"
+            logger.exception("LRC file is empty or could not be read")
+            return False
+
+        # Read the ASR transcript content
+        asr_transcript = read_file(transcript_path)
+        if not asr_transcript:
+            results.timestamp_verification_success = False
+            results.error_message = "Could not read ASR transcript for timestamp verification"
+            logger.exception("ASR transcript file is empty or could not be read")
+            return False
+
+        # Verify and correct timestamps
+        corrected_lrc_content = verify_and_correct_timestamps(lrc_content, asr_transcript)
+
+        if corrected_lrc_content:
+            # Save the corrected LRC content
+            write_file(str(corrected_lrc_path), corrected_lrc_content)
+
+            results.timestamp_verification_success = True
+            results.corrected_lrc_path = str(corrected_lrc_path)
+
+            # Count corrections by comparing original and corrected content
+            original_lines = set(lrc_content.strip().split('\n'))
+            corrected_lines = set(corrected_lrc_content.strip().split('\n'))
+            corrections_count = len(original_lines.symmetric_difference(corrected_lines))
+            results.timestamp_corrections_applied = corrections_count
+
+            logger.info(f"LRC timestamps verified and corrected, saved to: {corrected_lrc_path}")
+            logger.info(f"Applied {corrections_count} timestamp corrections")
+            return True
+        else:
+            results.timestamp_verification_success = False
+            results.error_message = "Timestamp verification returned no corrected content"
+            logger.exception("Failed to verify and correct LRC timestamps")
+            return False
+
+    except Exception as e:
+        results.timestamp_verification_success = False
+        results.error_message = f"Timestamp verification failed: {e}"
+        logger.exception(f"Exception during timestamp verification: {e}")
+        return False
+
+
 def translate_lrc_step(lrc_path: str, paths: dict, target_language: str, resume: bool, log_level: int, results: ProcessingResults) -> bool:
     """Step 6: Add translation to Traditional Chinese."""
     translated_lrc_path = paths['translated_lrc']
@@ -470,17 +539,17 @@ def process_single_audio_file(
             return False, results.to_dict()
 
         # Step 2: Separate vocals using UVR
-        if not separate_vocals_step(input_file, paths, resume, results):
-            results.finalize()
-            return False, results.to_dict()
+        # if not separate_vocals_step(input_file, paths, resume, results):
+        #     results.finalize()
+        #     return False, results.to_dict()
 
         # Step 3: Transcribe vocals with ASR and timestamps
-        if not transcribe_vocals_step(results.vocals_file_path, paths, resume, results):
+        if not transcribe_vocals_step(input_file, paths, resume, results):
             results.finalize()
             return False, results.to_dict()
 
         # Read transcript content for potential song identification
-        transcript_path = str(paths['transcript_txt'])
+        transcript_path = str(paths['transcript_word_txt'])
         transcript_content = None
         try:
             transcript_content = read_file(transcript_path)
@@ -515,9 +584,16 @@ def process_single_audio_file(
             results.finalize()
             return False, results.to_dict()
 
-        # Step 6: Add translation to Traditional Chinese
+        # Step 5.5: Verify and correct LRC timestamps
         lrc_path = str(paths['lrc'])
-        if not translate_lrc_step(lrc_path, paths, target_language, resume, log_level, results):
+        transcript_path = str(paths['transcript_word_txt'])
+        if not verify_and_correct_timestamps_step(lrc_path, transcript_path, paths, resume, results):
+            results.finalize()
+            return False, results.to_dict()
+
+        # Step 6: Add translation to Traditional Chinese
+        corrected_lrc_path = str(paths['corrected_lrc'])
+        if not translate_lrc_step(corrected_lrc_path, paths, target_language, resume, log_level, results):
             results.finalize()
             return False, results.to_dict()
 

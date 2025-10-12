@@ -27,10 +27,5 @@ IMPORTANT INSTRUCTIONS FOR LYRICS SOURCE URL:
 - When using web_url_read to fetch lyrics, include the URL you used in the "lyrics_source_url" field
 - The lyrics_source_url should be the actual URL from which the lyrics were successfully extracted
 
-CRITICAL ASR CONTENT VALIDATION:
-- Before attempting song identification, analyze the ASR transcript to determine if it contains actual song lyrics
-- Check if the content seems completely unrelated to music or song lyrics
-- If so, set "asr_content_weird" to true and end your analysis immediately
-
 IMPORTANT: Respond with a JSON object that matches this schema:
 {json_schema}

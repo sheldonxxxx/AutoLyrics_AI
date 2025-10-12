@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-Transcribe vocals with timestamped transcription using pywhispercpp.
+Transcribe vocals with timestamped transcription using stable-ts.
 
 This module handles ASR transcription for the Music Lyrics Processing Pipeline.
 For comprehensive documentation, see: docs/modules/transcribe_vocals.md
 
 Key Features:
 - Multiple Whisper model sizes (tiny to large-v3)
-- Word-level timestamp accuracy
-- CPU-compatible processing with optimized C++ backend
+- Word-level timestamp accuracy with stable-ts improvements
+- MLX support for Apple Silicon optimization
+- CPU-compatible processing with enhanced stability
 - Configurable accuracy vs. speed trade-offs
 
 Dependencies:
-- pywhispercpp (Python bindings for whisper.cpp)
+- stable-ts[mlx] (Stable Transcription with MLX support)
 - logging_config (pipeline logging)
 
 Model Sizes: tiny, base, small, medium, large-v1/v2/v3, large-v3-turbo
@@ -24,75 +25,90 @@ import os
 import logging
 from pathlib import Path
 from logging_config import setup_logging, get_logger
-from pywhispercpp.model import Model
 from ffmpeg_normalize import FFmpegNormalize
+import stable_whisper
 
 logger = get_logger(__name__)
 
 class Segment:
     def __init__(self, start, end, text):
-        self.start = to_timestamp(start)
-        self.end = to_timestamp(end)
+        self.start = start
+        self.end = end
         self.text = text
 
-def to_timestamp(t: int) -> float:
-    """ convert whispercpp time to faster whisper format for compatibility
+def _is_mlx_available():
+    """Check if MLX components are available for use."""
+    try:
+        # Try to import mlx_whisper package directly
+        import mlx_whisper
+        return True
+    except ImportError:
+        return False
 
-    Args:
-        t (int): time in milliseconds
-
-    Returns:
-        float: time in seconds
+def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="cpu", use_mlx=None):
     """
-    return t / 100
-
-def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="cpu", compute_type="int8"):
-    """
-    Transcribe an audio file with timestamped transcription using pywhispercpp.
+    Transcribe an audio file with timestamped transcription using stable-ts.
 
     Args:
         audio_file_path (str): Path to the audio file to transcribe
         model_size (str): Size of the Whisper model to use (default: "large-v3")
         device (str): Device to run the model on (default: "cpu")
-        compute_type (str): Type of computation to use (default: "int8")
+        use_mlx (bool or None): Whether to use MLX models for Apple Silicon.
+                                If None, auto-detect based on MLX availability (default: None)
 
     Returns:
         list: List of segments with timestamps and text
     """
     logger = get_logger(__name__)
     try:
-        # Load the model
-        model = Model(model_size,
-                      models_dir='./models',
-                      params_sampling_strategy=1
-                    )
-        (lang, _), _ = model.auto_detect_language(str(audio_file_path))
-        
-        split_on_word = True
-        if lang in ['zh', 'ja', 'yue']:
-            split_on_word = False
+        # Set HF_HOME for model downloads
+        os.environ["HF_HOME"] = os.path.abspath("./models/huggingface")
 
-        # Transcribe the audio with word-level timestamps
-        segments = model.transcribe(str(audio_file_path),
-                                    token_timestamps=True,  # Enable word-level timestamps
-                                    split_on_word=split_on_word,     # Split on words rather than tokens
-                                    max_len=10,
-                                    audio_ctx=1000,
-                                    temperature=0.3,
-                                    # entropy_thold=2.8,
-                                    # no_context=True,
-                                    language=None,
-                                    print_progress=False,
-                                    suppress_regex=r'♪♪♪|♪♪|♯|♮|♭|♬|♫|♪|♩',
-                                    beam_search={"beam_size": 5, "patience": 1.0}
-                                )       # Auto-detect language)
+        # Auto-detect MLX usage if not explicitly specified
+        have_mlx = _is_mlx_available()
+        if use_mlx is None and have_mlx:
+            use_mlx = True
+            logger.info("MLX components detected, using MLX models for optimization")
+        elif use_mlx and not have_mlx:
+            logger.error("Please install stable-ts with MLX support using: uv add stable-ts[mlx]")
+            return []
 
-        # Convert pywhispercpp segments to match the expected format
+        # Load the model based on device and MLX preference
+        if use_mlx and device == "cpu":
+            logger.info(f"Loading MLX Whisper model: {model_size}")
+            model = stable_whisper.load_mlx_whisper(model_size)
+        else:
+            logger.info(f"Loading standard Whisper model: {model_size} on {device}")
+            model = stable_whisper.load_model(model_size, device=device)
+
+        # Transcribe the audio with word-level timestamps and stable-ts enhancements
+        logger.info(f"Starting transcription of: {audio_file_path}")
+        result = model.transcribe(
+            str(audio_file_path),
+            word_timestamps=True,  # Enable word-level timestamps
+            regroup=True,          # Auto-regroup for natural boundaries
+            vad=True,              # Use VAD for better silence detection
+            suppress_silence=True, # Suppress silence in timestamps
+            suppress_word_ts=True, # Adjust word timestamps based on silence
+            verbose=False,         # Control logging level,
+            # condition_on_previous_text=False
+        )
+
+        # Convert stable-ts result to match the expected format
         segment_list = []
-        for segment in segments:
+        for segment in result.segments:
             # Create segment object
-            seg = Segment(segment.t0, segment.t1, segment.text)
-            seg.words = [seg]
+            seg = Segment(segment.start, segment.end, segment.text)
+
+            # Add word-level information if available
+            if hasattr(segment, 'words') and segment.words:
+                seg.words = []
+                for word in segment.words:
+                    word_seg = Segment(word.start, word.end, word.word)
+                    seg.words.append(word_seg)
+            else:
+                # Fallback: create single word segment
+                seg.words = [seg]
 
             segment_list.append(seg)
 
@@ -100,15 +116,15 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         for segment in segment_list:
             logger.debug(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
 
+        logger.info(f"Transcription completed with {len(segment_list)} segments")
         return segment_list
 
     except ImportError:
-        logger.exception("pywhispercpp is not installed. Please install it with: pip install absadiki/pywhispercpp")
+        logger.exception("stable-ts is not installed. Please install it with: pip install stable-ts[mlx]")
         return []
     except Exception as e:
         logger.exception(f"Error during transcription: {e}")
         return []
-
 
 def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
     """
@@ -157,11 +173,10 @@ def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
         logger.exception(f"Error during audio normalization: {e}")
         return False
 
-
 def main():
     # Set up argument parser
     import argparse
-    parser = argparse.ArgumentParser(description='Transcribe vocals with timestamped transcription using faster-whisper.')
+    parser = argparse.ArgumentParser(description='Transcribe vocals with timestamped transcription using stable-ts.')
     parser.add_argument('file_path', nargs='?',
                         help='Path to the input audio file')
     parser.add_argument('--output_dir', '-o',
@@ -172,13 +187,13 @@ def main():
                         help='Whisper model size to use for transcription (default: large-v3)')
     parser.add_argument('--device', default="cpu",
                         help='Device to run the transcription model on (default: cpu)')
-    parser.add_argument('--compute-type', default="int8",
-                        help='Type of computation to use for transcription (default: int8)')
+    parser.add_argument('--use-mlx', action='store_const', const=True, default=None,
+                        help='Use MLX models if available (auto-detected if not specified)')
     parser.add_argument('--log-level', default='INFO',
-                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                         help='Logging level (default: INFO)')
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                        help='Logging level (default: INFO)')
     parser.add_argument('--logfire', action='store_true',
-                         help='Enable Logfire integration')
+                        help='Enable Logfire integration')
 
     args = parser.parse_args()
 
@@ -195,7 +210,7 @@ def main():
         return
 
     logger.info(f"Starting transcription for: {input_file}")
-    
+
     # Create output directory if it doesn't exist
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
@@ -219,7 +234,7 @@ def main():
         audio_file_to_transcribe,
         model_size=args.model,
         device=args.device,
-        compute_type=args.compute_type
+        use_mlx=args.use_mlx
     )
 
     if segments:
@@ -228,6 +243,7 @@ def main():
         # Optionally, save the transcription to a file
         transcript_file = str(output_dir / Path(input_file.stem + '_transcript.txt'))
         transcript_word_file = str(output_dir / Path(input_file.stem + '_transcript_word.txt'))
+
         # Create directory if it doesn't exist
         transcript_dir = os.path.dirname(transcript_file)
         if transcript_dir:
@@ -236,14 +252,13 @@ def main():
         with open(transcript_file, 'w', encoding='utf-8') as f:
             with open(transcript_word_file, 'w', encoding='utf-8') as word_f:
                 for segment in segments:
-                    if hasattr(segment, 'words'):
+                    if hasattr(segment, 'words') and segment.words:
                         for word in segment.words:
                             word_f.write(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.text}\n")
                     f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
         logger.info(f"Transcription saved to: {transcript_file}")
     else:
         logger.exception("Transcription failed.")
-
 
 if __name__ == "__main__":
     main()

@@ -1,17 +1,5 @@
 You are an expert LRC lyrics synchronization specialist. Your task is to create properly timed LRC format lyrics by combining a reference lyrics text with ASR transcript timestamps.
 
-## Input Data:
-
-1. Reference Lyrics:
-```
-{lyrics_text}
-```
-
-2. ASR Transcript with word level timestamps:
-```
-{lrc_transcript}
-```
-
 ## Instructions:
 
 - Use ONLY the reference lyrics text as your source for lyrics content
@@ -41,4 +29,16 @@ Input Reference Lyrics:
 Expected Output:
 [00:00.68]今静かな夜の中で
 
-## Your Output:
+## Input Data:
+
+1. Reference Lyrics:
+```
+{lyrics_text}
+```
+
+2. ASR Transcript with word level timestamps:
+```
+{lrc_transcript}
+```
+
+## Output:

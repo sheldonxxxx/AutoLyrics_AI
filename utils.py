@@ -117,6 +117,7 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
         'song_identification': song_folder / f"{filename_stem}_song_identification.json",
         'lyrics_txt': song_folder / f"{filename_stem}_lyrics.txt",
         'lrc': song_folder / f"{filename_stem}.lrc",
+        'corrected_lrc': song_folder / f"{filename_stem}_corrected.lrc",
         'translated_lrc': nested_output_path / f"{filename_stem}.lrc"
     }
 
@@ -370,6 +371,9 @@ def write_csv_results(csv_file_path: str, results: list) -> bool:
 
                 # LRC generation results
                 'lrc_generation_success', 'lrc_line_count', 'lrc_has_timestamps',
+
+                # Timestamp verification results
+                'timestamp_verification_success', 'timestamp_corrections_applied', 'corrected_lrc_path',
 
                 # Translation results
                 'translation_success', 'translation_target_language',
