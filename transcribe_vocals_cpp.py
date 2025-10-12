@@ -66,11 +66,17 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
                       models_dir='./models',
                       params_sampling_strategy=1
                     )
+        (lang, _), _ = model.auto_detect_language(str(audio_file_path))
+        
+        split_on_word = True
+        if lang in ['zh', 'ja', 'yue']:
+            split_on_word = False
+        print(model.available_languages())
 
         # Transcribe the audio with word-level timestamps
         segments = model.transcribe(str(audio_file_path),
                                     token_timestamps=True,  # Enable word-level timestamps
-                                    # split_on_word=True,     # Split on words rather than tokens
+                                    split_on_word=split_on_word,     # Split on words rather than tokens
                                     max_len=10,
                                     temperature=0.3,
                                     # no_context=True,
