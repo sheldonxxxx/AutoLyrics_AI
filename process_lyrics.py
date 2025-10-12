@@ -36,7 +36,7 @@ from typing import Dict, List, Optional, Tuple
 from logging_config import setup_logging, get_logger
 from extract_metadata import extract_metadata
 from separate_vocals import separate_vocals
-from transcribe_vocals import transcribe_with_timestamps, normalize_audio
+from transcribe_vocals_cpp import transcribe_with_timestamps, normalize_audio
 from generate_lrc import read_file, generate_lrc_lyrics, correct_grammar_in_transcript
 from translate_lrc import translate_lrc_content
 from identify_song import identify_song_from_asr
@@ -239,8 +239,9 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
             with open(transcript_file, 'w', encoding='utf-8') as f:
                 with open(transcript_word_file, 'w', encoding='utf-8') as word_f:
                     for segment in segments:
-                        for word in segment.words:
-                            word_f.write(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.word}\n")
+                        if hasattr(segment, 'words'):
+                            for word in segment.words:
+                                word_f.write(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.text}\n")
                         f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
             logger.info(f"Transcription completed: {len(segments)} segments, saved to: {transcript_file}")
             return True
@@ -580,7 +581,7 @@ def main():
         help='Disable colored logging output (default: False)'
     )
     parser.add_argument(
-        '--target-language',
+        '--language',
         default='Traditional Chinese',
         help='Target language for translation (default: Traditional Chinese)'
     )
@@ -615,7 +616,7 @@ def main():
     all_results = []
     for audio_file in audio_files:
         logger.info(f"Processing {audio_file} ({success_count + 1}/{len(audio_files)})")
-        success, results = process_single_audio_file(audio_file, args.output_dir, args.target_language ,args.temp_dir, args.resume, log_level, args.input_dir)
+        success, results = process_single_audio_file(audio_file, args.output_dir, args.language ,args.temp_dir, args.resume, log_level, args.input_dir)
         all_results.append(results)
 
         if success:

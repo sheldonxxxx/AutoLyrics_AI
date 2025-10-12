@@ -27,7 +27,7 @@ from logging_config import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
-def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str ="htdemucs_ft.yaml"):
+def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str ="vocals_mel_band_roformer.ckpt"):
     """
     Separate vocals from an audio file using audio-separator.
 
@@ -51,7 +51,8 @@ def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str =
     separator = Separator(log_level=logging.WARNING,
                           model_file_dir=model_dir,
                           output_dir=vocals_output_path.parent,
-                          output_single_stem="Vocals")  # Only output the vocals stem
+                          output_single_stem="Vocals",
+                          sample_rate=16000)  # Only output the vocals stem
     
     # Load the model
     output_files = separator.load_model(model_filename=model)

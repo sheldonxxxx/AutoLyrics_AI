@@ -481,4 +481,3 @@ def get_translation_config() -> Dict[str, str]:
     config["model"] = model
 
     return config
-
