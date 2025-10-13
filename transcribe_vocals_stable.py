@@ -94,7 +94,8 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             suppress_silence=True, # Suppress silence in timestamps
             suppress_word_ts=True, # Adjust word timestamps based on silence
             verbose=False,         # Control logging level,
-            condition_on_previous_text=False
+            condition_on_previous_text=False,
+            hallucination_silence_threshold=2.0,
         )
 
         # Convert stable-ts result to match the expected format
