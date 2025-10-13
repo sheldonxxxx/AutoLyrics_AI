@@ -213,8 +213,8 @@ def process_single_file(input_file: Path, output_dir: Path, args) -> bool:
         logger.info(f"Transcription completed with {len(segments)} segments for {input_file}")
 
         # Save the transcription to files
-        transcript_file = output_dir / input_file.with_suffix('_transcript.txt').name
-        transcript_word_file = output_dir / input_file.with_suffix('_transcript_word.txt').name
+        transcript_file = output_dir / f"{input_file.stem}_transcript.txt"
+        transcript_word_file = output_dir / f"{input_file.stem}_transcript_word.txt"
 
         # Create directory if it doesn't exist
         transcript_dir = os.path.dirname(transcript_file)
@@ -334,55 +334,6 @@ def main():
         if successful_count == 0:
             logger.error("No files were successfully processed")
             exit(1)
-
-    # Create output directory if it doesn't exist
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-        output_dir = Path(args.output_dir)
-    else:
-        output_dir = Path(input_file).parent
-
-    # Handle normalization if requested
-    audio_file_to_transcribe = input_file
-    if args.normalize:
-        output_path = output_dir / Path(input_file.stem + '_normalized.wav')
-        if not normalize_audio(Path(input_file), output_path):
-            logger.exception("Audio normalization failed")
-            return
-
-        audio_file_to_transcribe = str(output_path)
-        logger.info(f"Using normalized audio file for transcription: {audio_file_to_transcribe}")
-
-    # Transcribe the vocals with timestamps
-    segments = transcribe_with_timestamps(
-        audio_file_to_transcribe,
-        model_size=args.model,
-        device=args.device,
-        use_mlx=args.use_mlx
-    )
-
-    if segments:
-        logger.info(f"\nTranscription completed with {len(segments)} segments.")
-
-        # Optionally, save the transcription to a file
-        transcript_file = str(output_dir / Path(input_file.stem + '_transcript.txt'))
-        transcript_word_file = str(output_dir / Path(input_file.stem + '_transcript_word.txt'))
-
-        # Create directory if it doesn't exist
-        transcript_dir = os.path.dirname(transcript_file)
-        if transcript_dir:
-            os.makedirs(transcript_dir, exist_ok=True)
-
-        with open(transcript_file, 'w', encoding='utf-8') as f:
-            with open(transcript_word_file, 'w', encoding='utf-8') as word_f:
-                for segment in segments:
-                    if hasattr(segment, 'words') and segment.words:
-                        for word in segment.words:
-                            word_f.write(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.text}\n")
-                    f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
-        logger.info(f"Transcription saved to: {transcript_file}")
-    else:
-        logger.exception("Transcription failed.")
 
 if __name__ == "__main__":
     main()
