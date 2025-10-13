@@ -549,7 +549,7 @@ def process_single_audio_file(
             return False, results.to_dict()
 
         # Read transcript content for potential song identification
-        transcript_path = str(paths['transcript_word_txt'])
+        transcript_path = str(paths['transcript_txt'])
         transcript_content = None
         try:
             transcript_content = read_file(transcript_path)
