@@ -105,6 +105,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         # Pick 4 15-second segments from the audio for language detection
         language = None
         languages = []
+        logger.info("Detecting language using multiple audio segments for robustness")
         audio_duration = len(audio) / stable_whisper.whisper_compatibility.SAMPLE_RATE
         segment_starts = [max(0, int(audio_duration * frac) - 5) for frac in [0.3, 0.5, 0.7, 0.9]]
         for start in segment_starts:
@@ -130,7 +131,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             only_voice_freq=True,
             suppress_silence=True, # Suppress silence in timestamps
             suppress_word_ts=True, # Adjust word timestamps based on silence
-            verbose=True,         # Control logging level,
+            verbose=None,         # Control logging level,
             condition_on_previous_text=False,
             hallucination_silence_threshold=2.0,
         )
