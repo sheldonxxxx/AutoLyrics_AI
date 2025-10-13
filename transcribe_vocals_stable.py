@@ -27,6 +27,7 @@ from pathlib import Path
 from logging_config import setup_logging, get_logger
 from ffmpeg_normalize import FFmpegNormalize
 import stable_whisper
+from stable_whisper.audio import load_audio
 from typing import List
 from utils import find_audio_files
 
@@ -46,6 +47,23 @@ def _is_mlx_available():
         return True
     except ImportError:
         return False
+    
+def detect_language(model, audio, start=30, duration=30):
+    """
+    Detect the language of the audio using a segment.
+
+    Args:
+        model: The Whisper model instance
+        audio: The loaded audio data
+        start (int): Start time in seconds for the segment to analyze
+        duration (int): Duration in seconds for the segment to analyze
+
+    Returns:
+        str: Detected language code
+    """
+    start = start * stable_whisper.whisper_compatibility.SAMPLE_RATE
+    end = start + duration * stable_whisper.whisper_compatibility.SAMPLE_RATE
+    return model.transcribe(audio[start:end], language=None, verbose=None, only_voice_freq=True).language
 
 def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="cpu", use_mlx=None):
     """
@@ -61,7 +79,6 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
     Returns:
         list: List of segments with timestamps and text
     """
-    logger = get_logger(__name__)
     try:
         # Set HF_HOME for model downloads
         os.environ["HF_HOME"] = os.path.abspath("./models/huggingface")
@@ -82,18 +99,38 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         else:
             logger.info(f"Loading standard Whisper model: {model_size} on {device}")
             model = stable_whisper.load_model(model_size, device=device)
-
+            
+        audio = load_audio(audio_file_path)
+        
+        # Pick 4 15-second segments from the audio for language detection
+        language = None
+        languages = []
+        audio_duration = len(audio) / stable_whisper.whisper_compatibility.SAMPLE_RATE
+        segment_starts = [max(0, int(audio_duration * frac) - 5) for frac in [0.3, 0.5, 0.7, 0.9]]
+        for start in segment_starts:
+            lang = detect_language(model, audio, start=start, duration=15)
+            languages.append(lang)
+            logger.debug(f"Detected language '{lang}' from segment starting at {start}s")
+        # Choose the most frequently detected language
+        if languages:
+            detected_language = max(set(languages), key=languages.count)
+            logger.info(f"Final detected language: {detected_language}")
+            language = detected_language
+        else:
+            logger.warning("No language detected, proceeding without setting language")
+        
         # Transcribe the audio with word-level timestamps and stable-ts enhancements
         logger.info(f"Starting transcription of: {audio_file_path}")
         result = model.transcribe(
-            str(audio_file_path),
+            audio,
+            language=language,
             word_timestamps=True,  # Enable word-level timestamps
             regroup=True,          # Auto-regroup for natural boundaries
             vad=True,              # Use VAD for better silence detection
             only_voice_freq=True,
             suppress_silence=True, # Suppress silence in timestamps
             suppress_word_ts=True, # Adjust word timestamps based on silence
-            verbose=False,         # Control logging level,
+            verbose=True,         # Control logging level,
             condition_on_previous_text=False,
             hallucination_silence_threshold=2.0,
         )
@@ -292,7 +329,7 @@ def main():
                          help='Whisper model size to use for transcription (default: large-v3)')
     parser.add_argument('--device', default="cpu",
                          help='Device to run the transcription model on (default: cpu)')
-    parser.add_argument('--use-mlx', action='store_const', const=True, default=None,
+    parser.add_argument('--use-mlx', action='store_true',
                          help='Use MLX models if available (auto-detected if not specified)')
     parser.add_argument('--log-level', default='INFO',
                          choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
