@@ -188,7 +188,7 @@ def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
         # Initialize FFmpegNormalize with specified parameters
         normalizer = FFmpegNormalize(
             output_format='wav',
-            sample_rate=48000,
+            sample_rate=16000,
             progress=logger.level <= logging.DEBUG,
             keep_lra_above_loudness_range_target=True
         )
@@ -232,7 +232,7 @@ def process_single_file(input_file: Path, output_dir: Path, args) -> bool:
     # Handle normalization if requested
     audio_file_to_transcribe = input_file
     if args.normalize:
-        output_path = output_dir / input_file.with_suffix('_normalized.wav').name
+        output_path = output_dir / input_file.name.replace(input_file.suffix, "_normalized.wav")
         if not normalize_audio(input_file, output_path):
             logger.error(f"Audio normalization failed for {input_file}")
             return False
