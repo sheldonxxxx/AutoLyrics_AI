@@ -36,21 +36,21 @@ logger = get_logger(__name__)
 
 def find_audio_files(input_dir: str) -> List[Path]:
     """
-    Find all audio files (FLAC and MP3) in the input directory recursively.
+    Find all audio files in the input directory recursively.
 
     Args:
         input_dir (str): Directory to search for audio files
 
     Returns:
-        List[Path]: List of audio file paths found (FLAC and MP3)
+        List[Path]: List of audio file paths found
     """
     input_path = Path(input_dir)
     if not input_path.exists():
-        logger.exception(f"Input directory does not exist: {input_dir}")
+        logger.error(f"Input directory does not exist: {input_dir}")
         return []
 
-    # Find both FLAC and MP3 files
-    audio_extensions = ['*.flac', '*.mp3']
+    # Find audio files with common extensions
+    audio_extensions = ['*.flac', '*.mp3', '*.wav', '*.m4a', '*.aac', '*.ogg', '*.wma']
     audio_files = []
     for ext in audio_extensions:
         audio_files.extend(list(input_path.rglob(ext)))
@@ -58,7 +58,8 @@ def find_audio_files(input_dir: str) -> List[Path]:
     # Filter out macOS resource fork files and other system files starting with '._'
     filtered_audio_files = [f for f in audio_files if not f.name.startswith('._')]
 
-    logger.info(f"Found {len(filtered_audio_files)} audio files ({', '.join(ext[1:] for ext in audio_extensions)}) in {input_dir} (filtered out {len(audio_files) - len(filtered_audio_files)} system files)")
+    supported_formats = ', '.join(ext[1:] for ext in audio_extensions)
+    logger.info(f"Found {len(filtered_audio_files)} audio files ({supported_formats}) in {input_dir} (filtered out {len(audio_files) - len(filtered_audio_files)} system files)")
     return filtered_audio_files
 
 

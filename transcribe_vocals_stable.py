@@ -27,6 +27,8 @@ from pathlib import Path
 from logging_config import setup_logging, get_logger
 from ffmpeg_normalize import FFmpegNormalize
 import stable_whisper
+from typing import List
+from utils import find_audio_files
 
 logger = get_logger(__name__)
 
@@ -88,6 +90,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             word_timestamps=True,  # Enable word-level timestamps
             regroup=True,          # Auto-regroup for natural boundaries
             vad=True,              # Use VAD for better silence detection
+            only_voice_freq=True,
             suppress_silence=True, # Suppress silence in timestamps
             suppress_word_ts=True, # Adjust word timestamps based on silence
             verbose=False,         # Control logging level,
@@ -173,27 +176,128 @@ def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
         logger.exception(f"Error during audio normalization: {e}")
         return False
 
+def process_single_file(input_file: Path, output_dir: Path, args) -> bool:
+    """
+    Process a single audio file for transcription.
+
+    Args:
+        input_file (Path): Path to the input audio file
+        output_dir (Path): Directory for output files
+        args: Parsed command line arguments
+
+    Returns:
+        bool: True if processing was successful, False otherwise
+    """
+    logger.info(f"Starting transcription for: {input_file}")
+
+    # Handle normalization if requested
+    audio_file_to_transcribe = input_file
+    if args.normalize:
+        output_path = output_dir / input_file.with_suffix('_normalized.wav').name
+        if not normalize_audio(input_file, output_path):
+            logger.error(f"Audio normalization failed for {input_file}")
+            return False
+
+        audio_file_to_transcribe = output_path
+        logger.info(f"Using normalized audio file for transcription: {audio_file_to_transcribe}")
+
+    # Transcribe the vocals with timestamps
+    segments = transcribe_with_timestamps(
+        str(audio_file_to_transcribe),
+        model_size=args.model,
+        device=args.device,
+        use_mlx=args.use_mlx
+    )
+
+    if segments:
+        logger.info(f"Transcription completed with {len(segments)} segments for {input_file}")
+
+        # Save the transcription to files
+        transcript_file = output_dir / input_file.with_suffix('_transcript.txt').name
+        transcript_word_file = output_dir / input_file.with_suffix('_transcript_word.txt').name
+
+        # Create directory if it doesn't exist
+        transcript_dir = os.path.dirname(transcript_file)
+        if transcript_dir:
+            os.makedirs(transcript_dir, exist_ok=True)
+
+        with open(transcript_file, 'w', encoding='utf-8') as f:
+            with open(transcript_word_file, 'w', encoding='utf-8') as word_f:
+                for segment in segments:
+                    if hasattr(segment, 'words') and segment.words:
+                        for word in segment.words:
+                            word_f.write(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.text}\n")
+                    f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
+        logger.info(f"Transcription saved to: {transcript_file}")
+        return True
+    else:
+        logger.error(f"Transcription failed for {input_file}")
+        return False
+
+def process_batch(input_dir: Path, output_dir: Path, args) -> int:
+    """
+    Process all audio files in a directory.
+
+    Args:
+        input_dir (Path): Directory containing audio files
+        output_dir (Path): Directory for output files
+        args: Parsed command line arguments
+
+    Returns:
+        int: Number of files successfully processed
+    """
+    logger.info(f"Starting batch processing for directory: {input_dir}")
+
+    # Find audio files using the utility function
+    audio_files = find_audio_files(str(input_dir))
+
+    if not audio_files:
+        logger.warning(f"No audio files found in {input_dir}")
+        return 0
+
+    # Process each file
+    successful = 0
+    failed = 0
+
+    for audio_file in audio_files:
+        logger.info(f"Processing file {successful + failed + 1}/{len(audio_files)}: {audio_file.name}")
+
+        # Create subdirectory structure if needed
+        relative_path = audio_file.relative_to(input_dir)
+        file_output_dir = output_dir / relative_path.parent
+        file_output_dir.mkdir(parents=True, exist_ok=True)
+
+        if process_single_file(audio_file, file_output_dir, args):
+            successful += 1
+        else:
+            failed += 1
+
+    logger.info(f"Batch processing completed: {successful} successful, {failed} failed")
+    return successful
+
 def main():
     # Set up argument parser
     import argparse
     parser = argparse.ArgumentParser(description='Transcribe vocals with timestamped transcription using stable-ts.')
-    parser.add_argument('file_path', nargs='?',
-                        help='Path to the input audio file')
+    parser.add_argument('input_path',
+                         help='Path to input audio file or directory containing audio files')
     parser.add_argument('--output_dir', '-o',
-                        help='Path for the normalized output file (if normalization is enabled)')
+                         help='Output directory for transcript files (default: same as input)')
     parser.add_argument('--normalize', action='store_true',
-                        help='Enable audio normalization to 48kHz WAV before transcription')
+                         help='Enable audio normalization to 48kHz WAV before transcription')
+    parser.add_argument('--recursive', '-r', action='store_true',
+                         help='Recursively search subdirectories for audio files (only used when input is a directory)')
     parser.add_argument('--model', default="large-v3",
-                        help='Whisper model size to use for transcription (default: large-v3)')
+                         help='Whisper model size to use for transcription (default: large-v3)')
     parser.add_argument('--device', default="cpu",
-                        help='Device to run the transcription model on (default: cpu)')
+                         help='Device to run the transcription model on (default: cpu)')
     parser.add_argument('--use-mlx', action='store_const', const=True, default=None,
-                        help='Use MLX models if available (auto-detected if not specified)')
+                         help='Use MLX models if available (auto-detected if not specified)')
     parser.add_argument('--log-level', default='INFO',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                        help='Logging level (default: INFO)')
+                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                         help='Logging level (default: INFO)')
     parser.add_argument('--logfire', action='store_true',
-                        help='Enable Logfire integration')
+                         help='Enable Logfire integration')
 
     args = parser.parse_args()
 
@@ -201,15 +305,35 @@ def main():
     log_level = getattr(logging, args.log_level.upper())
     setup_logging(level=log_level, enable_logfire=args.logfire)
 
-    # Define the input file path
-    input_file = Path(args.file_path)
+    # Define the input path
+    input_path = Path(args.input_path)
 
-    # Check if the input file exists
-    if not input_file.exists():
-        logger.exception(f"Input file does not exist: {input_file}")
+    # Check if the input path exists
+    if not input_path.exists():
+        logger.error(f"Input path does not exist: {input_path}")
         return
 
-    logger.info(f"Starting transcription for: {input_file}")
+    # Determine output directory
+    if args.output_dir:
+        output_dir = Path(args.output_dir)
+    else:
+        output_dir = input_path.parent if input_path.is_file() else input_path
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Process single file or batch
+    if input_path.is_file():
+        # Single file processing
+        success = process_single_file(input_path, output_dir, args)
+        if not success:
+            exit(1)
+    else:
+        # Batch processing
+        successful_count = process_batch(input_path, output_dir, args)
+        if successful_count == 0:
+            logger.error("No files were successfully processed")
+            exit(1)
 
     # Create output directory if it doesn't exist
     if args.output_dir:
