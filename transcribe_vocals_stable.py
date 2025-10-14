@@ -114,6 +114,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             logger.debug(f"Detected language '{lang}' from segment starting at {start}s")
         # Choose the most frequently detected language
         if languages:
+            logger.info(f"Languages detected from segments: {languages}")
             detected_language = max(set(languages), key=languages.count)
             logger.info(f"Final detected language: {detected_language}")
             language = detected_language
@@ -128,6 +129,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             word_timestamps=True,  # Enable word-level timestamps
             regroup=True,          # Auto-regroup for natural boundaries
             vad=True,              # Use VAD for better silence detection
+            denoiser="demucs",
             only_voice_freq=True,
             suppress_silence=True, # Suppress silence in timestamps
             suppress_word_ts=True, # Adjust word timestamps based on silence
@@ -189,8 +191,10 @@ def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
         normalizer = FFmpegNormalize(
             output_format='wav',
             sample_rate=16000,
-            progress=logger.level <= logging.DEBUG,
-            keep_lra_above_loudness_range_target=True
+            progress=False,
+            keep_lra_above_loudness_range_target=True,
+            target_level=-16.0,
+            audio_channels=1,
         )
 
         # Add the audio file for normalization
