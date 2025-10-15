@@ -23,6 +23,8 @@ IMPORTANT INSTRUCTIONS:
 - Use the same language as the lyrics to compose the search query
 - Use the native language script (Japanese characters, Korean Hangul, etc.) when possible
 - If the transcript contains mixed languages, prioritize the language that appears to be the primary lyrics language
+- When fetching lyrics from webpages, filter out all non-lyric content including ads, navigation, comments, related songs, and metadata - return only the actual song lyrics
+- Cross-check with at least one other website to make sure the lyrics is correct
 - Return the complete lyrics, **DO NOT TRUNCATE**
 
 IMPORTANT INSTRUCTIONS FOR LYRICS SOURCE URL:
