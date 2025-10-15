@@ -129,11 +129,11 @@ def correct_grammar_in_transcript(asr_transcript, filename=None):
             base_url=config["OPENAI_BASE_URL"],
             api_key=config["OPENAI_API_KEY"]
         )
-
+    
         # Create OpenAI model with the provider
         openai_model = OpenAIChatModel(
             config["OPENAI_MODEL"],
-            provider=openai_provider
+            provider=openai_provider,
         )
 
         # Create Pydantic AI agent for grammar correction

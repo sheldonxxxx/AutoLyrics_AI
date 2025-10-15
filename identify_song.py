@@ -160,6 +160,7 @@ class SongIdentifier:
         )
         
         settings = ModelSettings(
+            max_tokens=5000, # Avoid problematic long outputs
             extra_body={"enable_thinking": False}
         )
 

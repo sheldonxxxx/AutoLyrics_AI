@@ -208,9 +208,9 @@ def separate_vocals_step(input_file: Path, paths: dict, resume: bool, results: P
 def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results: ProcessingResults) -> Optional[List[SimpleNamespace]]:
     """Step 3: Normalize vocals and transcribe with ASR and timestamps."""
     transcript_path = paths['transcript_txt']
-    normalized_vocals_path = paths['normalized_vocals_wav']
+    # normalized_vocals_path = paths['normalized_vocals_wav']
 
-    logger.info("Step 3: Normalizing vocals and transcribing with ASR...")
+    # logger.info("Step 3: Normalizing vocals and transcribing with ASR...")
 
     if resume and transcript_path.exists():
         logger.info(f"ASR transcript already exists for {vocals_file}, skipping ASR...")
@@ -222,18 +222,18 @@ def transcribe_vocals_step(vocals_file: str, paths: dict, resume: bool, results:
         # Step 3a: Normalize vocals
         logger.info(f"Normalizing vocals: {vocals_file}")
         vocals_path = Path(vocals_file)
-        normalized_path = Path(normalized_vocals_path)
+        # normalized_path = Path(normalized_vocals_path)
 
-        if not normalize_audio(vocals_path, normalized_path):
-            logger.error(f"Failed to normalize vocals: {vocals_file}")
-            results.transcription_success = False
-            results.error_message = "Audio normalization failed"
-            return None
+        # if not normalize_audio(vocals_path, normalized_path):
+        #     logger.error(f"Failed to normalize vocals: {vocals_file}")
+        #     results.transcription_success = False
+        #     results.error_message = "Audio normalization failed"
+        #     return None
 
         # Step 3b: Transcribe the normalized vocals
-        logger.info(f"Transcribing normalized vocals: {normalized_path}")
-        # logger.info(f"Transcribing normalized vocals: {vocals_path}")
-        segments = transcribe_with_timestamps(str(normalized_path))
+        # logger.info(f"Transcribing normalized vocals: {normalized_path}")
+        logger.info(f"Transcribing vocals: {vocals_path}")
+        segments = transcribe_with_timestamps(str(vocals_path))
         if segments:
             results.transcription_success = True
             results.transcription_segments_count = len(segments)

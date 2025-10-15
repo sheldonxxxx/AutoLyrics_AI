@@ -130,7 +130,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             regroup=True,          # Auto-regroup for natural boundaries
             vad=True,              # Use VAD for better silence detection
             denoiser="demucs",
-            only_voice_freq=True,
+            # only_voice_freq=True,
             suppress_silence=True, # Suppress silence in timestamps
             suppress_word_ts=True, # Adjust word timestamps based on silence
             verbose=None,         # Control logging level,
