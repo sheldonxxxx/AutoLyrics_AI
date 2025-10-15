@@ -21,7 +21,7 @@ import os
 from dotenv import load_dotenv
 import logging
 from logging_config import setup_logging, get_logger
-from utils import load_prompt_template, get_default_llm_config
+from utils import load_prompt_template, get_default_llm_config, convert_transcript_to_lrc
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -53,6 +53,8 @@ def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str 
         logger.exception("Failed to load timestamp verification prompt template")
         return None
 
+    asr_transcript = convert_transcript_to_lrc(asr_transcript)
+    
     # Format the prompt with actual data
     prompt = prompt_template.format(lrc_content=lrc_content, asr_transcript=asr_transcript)
 
