@@ -910,7 +910,7 @@ def main():
         if not success:
             logger.warning(f"Phase 1 failed for {audio_file}: {results.error_message}")
 
-    logger.info(f"Phase 1 completed. {len([r for _, success, _, _ in first_phase_results if success])}/{len(audio_files)} files processed successfully.")
+    logger.info(f"Phase 1 completed. {len([success for _, success, _, _ in first_phase_results if success])}/{len(audio_files)} files processed successfully.")
 
     # Phase 2: Process all files through LLM operations using thread pool
     logger.info("Starting Phase 2: LLM operations for all files using thread pool...")
