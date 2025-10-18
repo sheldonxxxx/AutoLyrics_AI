@@ -34,6 +34,7 @@ from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
 from logging_config import setup_logging, get_logger
 from extract_metadata import extract_metadata
@@ -900,17 +901,37 @@ def main():
     logger.info("Starting Phase 1: Metadata extraction and transcription for all files...")
     first_phase_results = []
 
-    for i, audio_file in enumerate(audio_files, 1):
+
+    # Use progress bar if logging level is WARNING or higher
+    if log_level >= logging.WARNING:
+        phase1_iterator = tqdm(
+            enumerate(audio_files, 1),
+            total=len(audio_files),
+            desc="Phase 1: Metadata & Transcription",
+            unit="files"
+        )
+    else:
+        phase1_iterator = enumerate(audio_files, 1)
+
+    for i, audio_file in phase1_iterator:
         logger.info(f"Phase 1 - Processing {audio_file} ({i}/{len(audio_files)})")
+
         success, results, paths = process_first_phase(
             audio_file, args.output_dir, args.temp_dir, args.input_dir, args.resume
         )
         first_phase_results.append((audio_file, success, results, paths))
 
         if not success:
-            logger.warning(f"Phase 1 failed for {audio_file}: {results.error_message}")
+            if log_level >= logging.WARNING:
+                phase1_iterator.set_postfix_str(f"Failed: {audio_file.name}")
+            else:
+                logger.warning(f"Phase 1 failed for {audio_file}: {results.error_message}")
 
-    logger.info(f"Phase 1 completed. {len([success for _, success, _, _ in first_phase_results if success])}/{len(audio_files)} files processed successfully.")
+    if log_level >= logging.WARNING:
+        phase1_iterator.close()
+
+    successful_count = len([success for _, success, _, _ in first_phase_results if success])
+    logger.info(f"Phase 1 completed. {successful_count}/{len(audio_files)} files processed successfully.")
 
     # Phase 2: Process all files through LLM operations using thread pool
     logger.info("Starting Phase 2: LLM operations for all files using thread pool...")
@@ -921,12 +942,11 @@ def main():
     with ThreadPoolExecutor(max_workers=min(10, len(audio_files))) as executor:
         for audio_file, first_phase_success, first_phase_results, paths in first_phase_results:
             if first_phase_success:
-                logger.info(f"Submitting Phase 2 for {audio_file}")
                 future = executor.submit(
                     process_second_phase,
                     audio_file,
                     paths,
-                    results,
+                    first_phase_results,  # Pass the ProcessingResults object from phase 1
                     args.language,
                     args.resume,
                     log_level
@@ -936,6 +956,16 @@ def main():
                 logger.info(f"Skipping Phase 2 for {audio_file} due to Phase 1 failure")
                 all_results.append(first_phase_results.to_dict())
 
+        # Use progress bar if logging level is WARNING or higher
+        if log_level >= logging.WARNING:
+            phase2_iterator = tqdm(
+                total=len(second_phase_futures),
+                desc="Phase 2: LLM Operations",
+                unit="files"
+            )
+        else:
+            phase2_iterator = None
+
         # Collect results as they complete
         for audio_file, future in second_phase_futures:
             try:
@@ -943,17 +973,30 @@ def main():
                 all_results.append(results.to_dict())
 
                 if success:
-                    logger.info(f"Phase 2 completed successfully for {audio_file}")
+                    if log_level < logging.WARNING:
+                        logger.info(f"Phase 2 completed successfully for {audio_file}")
                 else:
-                    logger.warning(f"Phase 2 failed for {audio_file}: {results.error_message}")
+                    if log_level >= logging.WARNING and phase2_iterator:
+                        phase2_iterator.set_postfix_str(f"Failed: {audio_file.name}")
+                    else:
+                        logger.warning(f"Phase 2 failed for {audio_file}: {results.error_message}")
 
             except Exception as e:
-                logger.exception(f"Exception in Phase 2 for {audio_file}: {e}")
+                if log_level >= logging.WARNING and phase2_iterator:
+                    phase2_iterator.set_postfix_str(f"Exception: {audio_file.name}")
+                else:
+                    logger.exception(f"Exception in Phase 2 for {audio_file}: {e}")
                 # Add the first phase results even if second phase failed
                 for file_path, _, results_obj, _ in first_phase_results:
                     if file_path == audio_file:
                         all_results.append(results_obj.to_dict())
                         break
+
+            if phase2_iterator:
+                phase2_iterator.update(1)
+
+        if phase2_iterator:
+            phase2_iterator.close()
 
     logger.info(f"Phase 2 completed. All files processed.")
 
