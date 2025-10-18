@@ -32,6 +32,8 @@ import time
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from logging_config import setup_logging, get_logger
 from extract_metadata import extract_metadata
@@ -41,6 +43,7 @@ from generate_lrc import read_file, generate_lrc_lyrics, correct_grammar_in_tran
 from verify_and_correct_timestamps import verify_and_correct_timestamps
 from translate_lrc import translate_lrc_content
 from identify_song import identify_song_from_asr
+from explain_lyrics import explain_lyrics_content
 from utils import (
     find_audio_files, ensure_output_directory, get_output_paths,
     parse_transcript_segments, convert_transcript_to_lrc,
@@ -96,6 +99,10 @@ class ProcessingResults:
         self.translation_success = False
         self.translation_target_language = 'Traditional Chinese'
 
+        self.explanation_success = False
+        self.explanation_target_language = 'Traditional Chinese'
+        self.explanation_length = 0
+
         # Overall results
         self.overall_success = False
         self.processing_end_time = ''
@@ -133,6 +140,12 @@ class ProcessingResults:
             'corrected_lrc_path': self.corrected_lrc_path,
             'translation_success': self.translation_success,
             'translation_target_language': self.translation_target_language,
+
+            # Explanation results
+            'explanation_success': self.explanation_success,
+            'explanation_target_language': self.explanation_target_language,
+            'explanation_length': self.explanation_length,
+
             'overall_success': self.overall_success,
             'processing_end_time': self.processing_end_time,
             'processing_duration_seconds': self.processing_duration_seconds,
@@ -144,6 +157,149 @@ class ProcessingResults:
         end_time = time.time()
         self.processing_end_time = datetime.now().isoformat()
         self.processing_duration_seconds = end_time - self.start_time
+
+def process_first_phase(
+    input_file: Path,
+    output_dir: str = "output",
+    temp_dir: str = "tmp",
+    input_dir: str = "input",
+    resume: bool = True
+) -> Tuple[bool, ProcessingResults, dict]:
+    """
+    First phase processing: metadata extraction, vocal separation, and transcription.
+
+    Args:
+        input_file (Path): Input audio file path
+        output_dir (str): Output directory for final LRC files
+        temp_dir (str): Temporary directory for intermediate files
+        input_dir (str): Input directory containing audio files
+        resume (bool): Whether to resume processing by skipping existing files
+
+    Returns:
+        Tuple[bool, ProcessingResults, dict]: (success, results, paths)
+    """
+    start_time = time.time()
+    results = ProcessingResults(input_file, start_time)
+
+    logger.info(f"First phase processing for file: {input_file}")
+
+    # Get output file paths
+    paths = get_output_paths(input_file, output_dir, temp_dir, input_dir)
+
+    try:
+        # Step 1: Extract metadata
+        if not extract_metadata_step(input_file, results):
+            results.finalize()
+            return False, results, paths
+
+        # Step 2: Separate vocals using UVR (currently commented out)
+        # if not separate_vocals_step(input_file, paths, resume, results):
+        #     results.finalize()
+        #     return False, results, paths
+
+        # Step 3: Transcribe vocals with ASR and timestamps
+        if not transcribe_vocals_step(str(input_file), paths, resume, results):
+            results.finalize()
+            return False, results, paths
+
+        results.finalize()
+        logger.info(f"First phase completed for {input_file}")
+        return True, results, paths
+
+    except Exception as e:
+        results.error_message = str(e)
+        results.finalize()
+        logger.exception(f"Error in first phase processing for {input_file}: {e}")
+        return False, results, paths
+
+def process_second_phase(
+    input_file: Path,
+    paths: dict,
+    results: ProcessingResults,
+    target_language: str = "Traditional Chinese",
+    resume: bool = True,
+    log_level: int = logging.INFO
+) -> Tuple[bool, ProcessingResults]:
+    """
+    Second phase processing: LLM operations (song identification, LRC generation, translation).
+
+    Args:
+        input_file (Path): Input audio file path
+        paths (dict): Output file paths dictionary
+        results (ProcessingResults): Results object from first phase
+        target_language (str): Target language for translation
+        resume (bool): Whether to resume processing by skipping existing files
+        log_level (int): Logging level for the process
+
+    Returns:
+        Tuple[bool, ProcessingResults]: (success, results)
+    """
+    logger.info(f"Second phase processing for file: {input_file}")
+
+    try:
+        # Read transcript content for potential song identification
+        transcript_path = str(paths['transcript_txt'])
+        transcript_content = None
+        try:
+            transcript_content = read_file(transcript_path)
+        except Exception as e:
+            logger.warning(f"Could not read transcript file for song identification: {e}", exc_info=True)
+
+        # Step 4: Identify song and search for lyrics using LLM
+        lyrics_content = identify_and_search_lyrics_step(
+            {
+                'title': results.metadata_title,
+                'artist': results.metadata_artist,
+                'album': results.metadata_album,
+                'genre': results.metadata_genre,
+                'year': results.metadata_year,
+                'track_number': results.metadata_track_number
+            },
+            paths,
+            resume,
+            results,
+            transcript_content
+        )
+
+        # If no lyrics found, skip for now
+        if not lyrics_content:
+            results.finalize()
+            return False, results
+
+        # Step 5: Generate LRC file
+        transcript_path = str(paths['transcript_word_txt'])
+        if not generate_lrc_step(lyrics_content, None, transcript_path, paths, resume, results):
+            results.finalize()
+            return False, results
+
+        # Step 5.5: Verify and correct LRC timestamps
+        lrc_path = str(paths['lrc'])
+        transcript_path = str(paths['transcript_word_txt'])
+        if not verify_and_correct_timestamps_step(lrc_path, transcript_path, paths, resume, results):
+            results.finalize()
+            return False, results
+
+        # Step 6: Explain lyrics in target language
+        corrected_lrc_path = str(paths['corrected_lrc'])
+        if not explain_lyrics_step(corrected_lrc_path, paths, target_language, resume, results):
+            results.finalize()
+            return False, results
+
+        # Step 7: Add translation to Traditional Chinese
+        if not translate_lrc_step(corrected_lrc_path, paths, target_language, resume, log_level, results):
+            results.finalize()
+            return False, results
+
+        results.finalize()
+        logger.info(f"Second phase completed for {input_file}")
+        return results.overall_success, results
+
+    except Exception as e:
+        results.error_message = str(e)
+        results.overall_success = False
+        results.finalize()
+        logger.exception(f"Error in second phase processing for {input_file}: {e}")
+        return False, results
 
 def extract_metadata_step(input_file: Path, results: ProcessingResults) -> bool:
     """Step 1: Extract metadata from audio file."""
@@ -426,10 +582,10 @@ def verify_and_correct_timestamps_step(lrc_path: str, transcript_path: str, path
 
 
 def translate_lrc_step(lrc_path: str, paths: dict, target_language: str, resume: bool, log_level: int, results: ProcessingResults) -> bool:
-    """Step 6: Add translation to Traditional Chinese."""
+    """Step 7: Add translation to Traditional Chinese."""
     translated_lrc_path = paths['translated_lrc']
 
-    logger.info("Step 6: Adding translation to Lyrics...")
+    logger.info("Step 7: Adding translation to Lyrics...")
 
     if resume and translated_lrc_path.exists():
         results.overall_success = True
@@ -476,6 +632,54 @@ def translate_lrc_step(lrc_path: str, paths: dict, target_language: str, resume:
         results.error_message = "Translation failed"
         logger.exception("Translation failed")
         return False
+
+
+def explain_lyrics_step(lrc_path: str, paths: dict, target_language: str, resume: bool, results: ProcessingResults) -> bool:
+    """Step 6: Explain lyrics in target language."""
+    explanation_path = paths['explanation_txt']
+
+    logger.info("Step 6: Explaining lyrics in target language...")
+
+    if resume and Path(explanation_path).exists():
+        logger.info(f"Lyrics explanation file already exists, skipping explanation...")
+        results.explanation_success = True
+        results.explanation_target_language = target_language
+        return True
+
+    try:
+        # Read the LRC content
+        lrc_content = read_file(lrc_path)
+        if not lrc_content:
+            results.explanation_success = False
+            results.error_message = "Could not read LRC file for explanation"
+            logger.exception("LRC file is empty or could not be read")
+            return False
+
+        # Explain the lyrics content
+        explanation_content = explain_lyrics_content(lrc_content, target_language)
+
+        if explanation_content:
+            # Save the explanation to file
+            write_file(explanation_path, explanation_content)
+
+            results.explanation_success = True
+            results.explanation_target_language = target_language
+            results.explanation_length = len(explanation_content)
+
+            logger.info(f"Lyrics explanation completed and saved to: {explanation_path}")
+            return True
+        else:
+            results.explanation_success = False
+            results.error_message = "Lyrics explanation returned no content"
+            logger.exception("Failed to explain lyrics")
+            return False
+
+    except Exception as e:
+        results.explanation_success = False
+        results.error_message = f"Lyrics explanation failed: {e}"
+        logger.exception(f"Exception during lyrics explanation: {e}")
+        return False
+
 
 def process_single_audio_file(
     input_file: Path,
@@ -591,8 +795,13 @@ def process_single_audio_file(
             results.finalize()
             return False, results.to_dict()
 
-        # Step 6: Add translation to Traditional Chinese
+        # Step 6: Explain lyrics in target language
         corrected_lrc_path = str(paths['corrected_lrc'])
+        if not explain_lyrics_step(corrected_lrc_path, paths, target_language, resume, results):
+            results.finalize()
+            return False, results.to_dict()
+
+        # Step 7∂: Add translation to Traditional Chinese
         if not translate_lrc_step(corrected_lrc_path, paths, target_language, resume, log_level, results):
             results.finalize()
             return False, results.to_dict()
@@ -687,20 +896,69 @@ def main():
         logger.warning(f"No audio files (FLAC or MP3) found in {args.input_dir}")
         return 0
 
-    # Process each audio file
-    success_count = 0
+    # Phase 1: Process all files through metadata extraction and transcription
+    logger.info("Starting Phase 1: Metadata extraction and transcription for all files...")
+    first_phase_results = []
+
+    for i, audio_file in enumerate(audio_files, 1):
+        logger.info(f"Phase 1 - Processing {audio_file} ({i}/{len(audio_files)})")
+        success, results, paths = process_first_phase(
+            audio_file, args.output_dir, args.temp_dir, args.input_dir, args.resume
+        )
+        first_phase_results.append((audio_file, success, results, paths))
+
+        if not success:
+            logger.warning(f"Phase 1 failed for {audio_file}: {results.error_message}")
+
+    logger.info(f"Phase 1 completed. {len([r for _, success, _, _ in first_phase_results if success])}/{len(audio_files)} files processed successfully.")
+
+    # Phase 2: Process all files through LLM operations using thread pool
+    logger.info("Starting Phase 2: LLM operations for all files using thread pool...")
+    second_phase_futures = []
     all_results = []
-    for audio_file in audio_files:
-        logger.info(f"Processing {audio_file} ({success_count + 1}/{len(audio_files)})")
-        success, results = process_single_audio_file(audio_file, args.output_dir, args.language ,args.temp_dir, args.resume, log_level, args.input_dir)
-        all_results.append(results)
 
-        if success:
-            success_count += 1
-        else:
-            logger.exception(f"Failed to process {audio_file}")
+    # Submit all second phase tasks to thread pool
+    with ThreadPoolExecutor(max_workers=min(10, len(audio_files))) as executor:
+        for audio_file, first_phase_success, first_phase_results, paths in first_phase_results:
+            if first_phase_success:
+                logger.info(f"Submitting Phase 2 for {audio_file}")
+                future = executor.submit(
+                    process_second_phase,
+                    audio_file,
+                    paths,
+                    results,
+                    args.language,
+                    args.resume,
+                    log_level
+                )
+                second_phase_futures.append((audio_file, future))
+            else:
+                logger.info(f"Skipping Phase 2 for {audio_file} due to Phase 1 failure")
+                all_results.append(first_phase_results.to_dict())
 
-    logger.info(f"Processing completed. Successfully processed {success_count}/{len(audio_files)} files.")
+        # Collect results as they complete
+        for audio_file, future in second_phase_futures:
+            try:
+                success, results = future.result()
+                all_results.append(results.to_dict())
+
+                if success:
+                    logger.info(f"Phase 2 completed successfully for {audio_file}")
+                else:
+                    logger.warning(f"Phase 2 failed for {audio_file}: {results.error_message}")
+
+            except Exception as e:
+                logger.exception(f"Exception in Phase 2 for {audio_file}: {e}")
+                # Add the first phase results even if second phase failed
+                for file_path, _, results_obj, _ in first_phase_results:
+                    if file_path == audio_file:
+                        all_results.append(results_obj.to_dict())
+                        break
+
+    logger.info(f"Phase 2 completed. All files processed.")
+
+    # Calculate success count for return code
+    success_count = len([r for r in all_results if r.get('overall_success', False)])
 
     # Write results to CSV
     logger.info(f"Writing processing results to CSV: {args.csv_output}")
@@ -708,7 +966,7 @@ def main():
         logger.info(f"CSV file saved successfully with {len(all_results)} records")
     else:
         logger.exception("Failed to write CSV file")
-    
+
     return 0 if success_count == len(audio_files) else 1
 
 

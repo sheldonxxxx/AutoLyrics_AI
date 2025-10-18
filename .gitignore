@@ -16,4 +16,6 @@ models/
 .env
 
 *.csv
+*.xlsx
+
 .DS_Store

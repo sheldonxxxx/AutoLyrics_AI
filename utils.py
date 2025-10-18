@@ -118,6 +118,7 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
         'song_identification': song_folder / f"{filename_stem}_song_identification.json",
         'lyrics_txt': song_folder / f"{filename_stem}_lyrics.txt",
         'lrc': song_folder / f"{filename_stem}.lrc",
+        'explanation_txt': song_folder / f"{filename_stem}_explanation.txt",
         'corrected_lrc': song_folder / f"{filename_stem}_corrected.lrc",
         'translated_lrc': nested_output_path / f"{filename_stem}.lrc"
     }
@@ -308,26 +309,37 @@ def remove_timestamps_from_transcript(transcript: str) -> str:
     logger.debug(f"Removed timestamps from transcript: {len(transcript)} -> {len(cleaned_transcript)} characters")
     return cleaned_transcript
 
-def get_prompt_file_for_language(target_language: str) -> str:
+def get_prompt_file_for_language(target_language: str, explanation: bool = False) -> str:
     """
     Get the appropriate prompt file name for the target language.
 
     Args:
-        target_language (str): Target language for translation
+        target_language (str): Target language for translation/explanation
+        explanation (bool): Whether to get explanation prompts (True) or translation prompts (False)
 
     Returns:
         str: Prompt file name for the language
     """
-    # Map language names to prompt file names
-    language_prompt_map = {
-        "Traditional Chinese": "lrc_traditional_chinese_prompt.txt",
-        # Add more specific language prompts here as they are created
-        # "English": "lrc_english_prompt.txt",
-        # "Japanese": "lrc_japanese_prompt.txt",
-    }
-
-    # Use specific prompt if available, otherwise use generic prompt
-    return language_prompt_map.get(target_language, "lrc_generic_translation_prompt.txt")
+    if explanation:
+        # Map language names to explanation prompt file names
+        language_prompt_map = {
+            "Traditional Chinese": "lrc_explanation_traditional_chinese_prompt.txt",
+            # Add more specific language prompts here as they are created
+            # "English": "lrc_explanation_english_prompt.txt",
+            # "Japanese": "lrc_explanation_japanese_prompt.txt",
+        }
+        # Use specific prompt if available, otherwise use generic explanation prompt
+        return language_prompt_map.get(target_language, "lrc_explanation_prompt.txt")
+    else:
+        # Map language names to translation prompt file names
+        language_prompt_map = {
+            "Traditional Chinese": "lrc_traditional_chinese_prompt.txt",
+            # Add more specific language prompts here as they are created
+            # "English": "lrc_english_prompt.txt",
+            # "Japanese": "lrc_japanese_prompt.txt",
+        }
+        # Use specific prompt if available, otherwise use generic prompt
+        return language_prompt_map.get(target_language, "lrc_generic_translation_prompt.txt")
 
 
 def write_csv_results(csv_file_path: str, results: list) -> bool:
@@ -378,6 +390,9 @@ def write_csv_results(csv_file_path: str, results: list) -> bool:
 
                 # Translation results
                 'translation_success', 'translation_target_language',
+
+                # Explanation results
+                'explanation_success', 'explanation_target_language', 'explanation_length',
 
                 # Overall results
                 'overall_success', 'processing_end_time', 'processing_duration_seconds', 'error_message'
@@ -486,3 +501,59 @@ def get_translation_config() -> Dict[str, str]:
     config["model"] = model
 
     return config
+
+def extract_lyrics(text):
+    """
+    Aggressively remove all lines containing any markdown, HTML, or link syntax.
+    """
+    
+    # Remove URLs first
+    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r'www\.\S+', '', text)
+    
+    lines = text.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Skip empty lines
+        if not stripped:
+            continue
+        
+        # Remove ANY line containing brackets (link artifacts)
+        if re.search(r'[\[\]\(\)]', stripped):
+            continue
+        
+        # Remove lines with HTML/XML tags
+        if re.search(r'<[^>]*>', stripped):
+            continue
+        
+        # Remove lines starting with # (headers)
+        if stripped.startswith('#'):
+            continue
+        
+        # Remove lines with markdown emphasis markers
+        if re.search(r'[\*_]{1,3}\S', stripped):
+            continue
+        
+        # Remove lines with backticks (code)
+        if '`' in stripped:
+            continue
+        
+        # Remove lines that are only dashes/asterisks/underscores (horizontal rules)
+        if re.match(r'^[\-\*_\s]{3,}$', stripped):
+            continue
+        
+        # Remove lines with copyright
+        if re.search(r'©|Copyright|\(C\)', stripped, re.IGNORECASE):
+            continue
+        
+        # Keep the line
+        cleaned_lines.append(stripped)
+    
+    # Join and clean up
+    result = '\n'.join(cleaned_lines)
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    
+    return result.strip()

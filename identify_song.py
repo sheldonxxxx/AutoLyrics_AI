@@ -39,65 +39,9 @@ from pydantic_ai.models.instrumented import InstrumentationSettings
 from pydantic_ai.toolsets import WrapperToolset
 from dotenv import load_dotenv
 from logging_config import get_logger
-from utils import get_default_llm_config, load_prompt_template, remove_timestamps_from_transcript
+from utils import get_default_llm_config, load_prompt_template, remove_timestamps_from_transcript, extract_lyrics
 
 logger = get_logger(__name__)
-
-def extract_lyrics(text):
-    """
-    Aggressively remove all lines containing any markdown, HTML, or link syntax.
-    """
-    
-    # Remove URLs first
-    text = re.sub(r'https?://\S+', '', text)
-    text = re.sub(r'www\.\S+', '', text)
-    
-    lines = text.split('\n')
-    cleaned_lines = []
-    
-    for line in lines:
-        stripped = line.strip()
-        
-        # Skip empty lines
-        if not stripped:
-            continue
-        
-        # Remove ANY line containing brackets (link artifacts)
-        if re.search(r'[\[\]\(\)]', stripped):
-            continue
-        
-        # Remove lines with HTML/XML tags
-        if re.search(r'<[^>]*>', stripped):
-            continue
-        
-        # Remove lines starting with # (headers)
-        if stripped.startswith('#'):
-            continue
-        
-        # Remove lines with markdown emphasis markers
-        if re.search(r'[\*_]{1,3}\S', stripped):
-            continue
-        
-        # Remove lines with backticks (code)
-        if '`' in stripped:
-            continue
-        
-        # Remove lines that are only dashes/asterisks/underscores (horizontal rules)
-        if re.match(r'^[\-\*_\s]{3,}$', stripped):
-            continue
-        
-        # Remove lines with copyright
-        if re.search(r'©|Copyright|\(C\)', stripped, re.IGNORECASE):
-            continue
-        
-        # Keep the line
-        cleaned_lines.append(stripped)
-    
-    # Join and clean up
-    result = '\n'.join(cleaned_lines)
-    result = re.sub(r'\n{3,}', '\n\n', result)
-    
-    return result.strip()
 
 class SearxngLimitingToolset(WrapperToolset):
     """Custom wrapper toolset to limit SearXNG search results."""

@@ -103,6 +103,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         audio = load_audio(audio_file_path)
         
         # Pick 4 15-second segments from the audio for language detection
+        # This is to avoid language detection error due to long non-vocal beginnings
         language = None
         languages = []
         logger.info("Detecting language using multiple audio segments for robustness")
