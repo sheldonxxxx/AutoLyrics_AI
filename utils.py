@@ -118,7 +118,7 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
         'song_identification': song_folder / f"{filename_stem}_song_identification.json",
         'lyrics_txt': song_folder / f"{filename_stem}_lyrics.txt",
         'lrc': song_folder / f"{filename_stem}.lrc",
-        'explanation_txt': song_folder / f"{filename_stem}_explanation.txt",
+        'explanation_txt': song_folder / f"{filename_stem}_explanation.md",
         'corrected_lrc': song_folder / f"{filename_stem}_corrected.lrc",
         'translated_lrc': nested_output_path / f"{filename_stem}.lrc"
     }
