@@ -88,6 +88,13 @@ class ProcessingResults:
         self.lyrics_length = 0
         self.lyrics_line_count = 0
 
+        # Story search results
+        self.story_search_success = False
+        self.story_type = ''
+        self.story_summary = ''
+        self.story_details = ''
+        self.story_sources = []
+        self.story_confidence = 0.0
 
         self.lrc_generation_success = False
         self.lrc_line_count = 0
@@ -133,6 +140,12 @@ class ProcessingResults:
             'lyrics_source': self.lyrics_source,
             'lyrics_length': self.lyrics_length,
             'lyrics_line_count': self.lyrics_line_count,
+            'story_search_success': self.story_search_success,
+            'story_type': self.story_type,
+            'story_summary': self.story_summary,
+            'story_details': self.story_details,
+            'story_sources': ', '.join(self.story_sources) if self.story_sources else '',
+            'story_confidence': self.story_confidence,
             'lrc_generation_success': self.lrc_generation_success,
             'lrc_line_count': self.lrc_line_count,
             'lrc_has_timestamps': self.lrc_has_timestamps,

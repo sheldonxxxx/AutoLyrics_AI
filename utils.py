@@ -21,12 +21,12 @@ Dependencies:
 
 Used By: All pipeline modules for shared functionality
 """
-
-from pathlib import Path
-from typing import List, Dict, Optional
-from types import SimpleNamespace
 import os
 import re
+from pathlib import Path
+from typing import List, Dict, Optional, Any
+from types import SimpleNamespace
+from pydantic_ai.toolsets import WrapperToolset
 
 from logging_config import get_logger
 
@@ -502,7 +502,7 @@ def get_translation_config() -> Dict[str, str]:
 
     return config
 
-def extract_lyrics(text):
+def extract_web_content(text):
     """
     Aggressively remove all lines containing any markdown, HTML, or link syntax.
     """
@@ -557,3 +557,32 @@ def extract_lyrics(text):
     result = re.sub(r'\n{3,}', '\n\n', result)
     
     return result.strip()
+
+class SearxngLimitingToolset(WrapperToolset):
+    """Custom wrapper toolset to limit SearXNG search results."""
+
+    def __init__(self, wrapped, max_results: int = 5):
+        """Initialize with configurable result limit.
+
+        Args:
+            wrapped: The underlying toolset to wrap
+            max_results: Maximum number of search results to return (default: 5)
+        """
+        super().__init__(wrapped)
+        self.max_results = max_results
+
+    async def call_tool(self, name: str, tool_args: dict[str, Any], ctx, tool) -> Any:
+        """Intercept tool calls and limit SearXNG results."""
+        # Call the original tool first
+        result = await super().call_tool(name, tool_args, ctx, tool)
+
+        # If this is a SearXNG search tool, limit results
+        if name == "searxng_web_search":
+            result_list = result.split('\n\n')
+            logger.info(f"Limiting SearXNG results from {len(result_list)} to {self.max_results}")
+            # Return only the first max_results results
+            return '\n\n'.join(result_list[:self.max_results])
+        elif name == "web_url_read":
+            result = extract_web_content(result)
+
+        return result

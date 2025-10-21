@@ -23,10 +23,9 @@ Pipeline Stage: 2/6 (Song Identification - Fallback)
 """
 
 import os
-import re
 import logging
 import json
-from typing import Dict, List, Optional, Tuple, Any
+from typing import List, Optional, Tuple
 from pathlib import Path
 from pydantic import BaseModel, Field
 
@@ -36,42 +35,12 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.mcp import MCPServerStreamableHTTP, MCPServerStdio
 from pydantic_ai.models.instrumented import InstrumentationSettings
-from pydantic_ai.toolsets import WrapperToolset
 from dotenv import load_dotenv
 from logging_config import get_logger
-from utils import get_default_llm_config, load_prompt_template, remove_timestamps_from_transcript, extract_lyrics
+from utils import get_default_llm_config, load_prompt_template, remove_timestamps_from_transcript, SearxngLimitingToolset
+from search_song_story import search_song_story_from_identification
 
 logger = get_logger(__name__)
-
-class SearxngLimitingToolset(WrapperToolset):
-    """Custom wrapper toolset to limit SearXNG search results."""
-
-    def __init__(self, wrapped, max_results: int = 5):
-        """Initialize with configurable result limit.
-
-        Args:
-            wrapped: The underlying toolset to wrap
-            max_results: Maximum number of search results to return (default: 5)
-        """
-        super().__init__(wrapped)
-        self.max_results = max_results
-
-    async def call_tool(self, name: str, tool_args: dict[str, Any], ctx, tool) -> Any:
-        """Intercept tool calls and limit SearXNG results."""
-        # Call the original tool first
-        result = await super().call_tool(name, tool_args, ctx, tool)
-
-        # If this is a SearXNG search tool, limit results
-        if name == "searxng_web_search":
-            result_list = result.split('\n\n')
-            logger.info(f"Limiting SearXNG results from {len(result_list)} to {self.max_results}")
-            # Return only the first max_results results
-            return '\n\n'.join(result_list[:self.max_results])
-        elif name == "web_url_read":
-            result = extract_lyrics(result)
-
-        return result
-
 
 class SongIdentification(BaseModel):
     """Structured output for song identification results."""
@@ -83,6 +52,11 @@ class SongIdentification(BaseModel):
     reasoning: str = Field(description="Explanation of how the identification was made")
     lyrics_content: Optional[str] = Field(description="The complete lyrics content if found, None otherwise")
     lyrics_source_url: Optional[str] = Field(description="The URL where the lyrics were obtained from, if found")
+    story_type: Optional[str] = Field(description="Type of story found (e.g., 'anime_theme', 'tv_show_theme', 'creation_story', 'cultural_significance', 'artist_background')")
+    story_summary: Optional[str] = Field(description="Summary of the song's background story if found")
+    story_details: Optional[str] = Field(description="Complete detailed story information if found")
+    story_sources: Optional[List[str]] = Field(description="List of sources/URLs used for the story")
+    story_confidence: Optional[float] = Field(description="Confidence score for the story search between 0.0 and 1.0")
 class SongIdentifier:
     """Class to identify songs from ASR transcripts using LLM and web search."""
 
@@ -375,6 +349,26 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
         result = identifier.identify_song(transcript)
 
     if result and result.confidence_score > 0.7:
+        # Search for song background story after successful identification
+        story_result = search_song_story_from_identification(
+            result.song_title,
+            result.artist_name,
+            result.native_language,
+            paths,
+            force_recompute=not force_recompute,
+            max_search_results=max_search_results
+        )
+        
+        # Update the result with story information if found
+        if story_result:
+            story_type, story_summary, story_details, sources_used, reasoning, confidence_score = story_result
+            result.story_type = story_type
+            result.story_summary = story_summary
+            result.story_details = story_details
+            result.story_sources = sources_used
+            result.story_confidence = confidence_score
+            logger.info(f"Found background story for '{result.song_title}' by '{result.artist_name}': {story_type}")
+
         song_info = (result.song_title, result.artist_name, result.native_language, result.lyrics_content, result.lyrics_source_url)
 
         # Save result if file path provided
@@ -392,7 +386,12 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
                     'reasoning': result.reasoning,
                     'lyrics_content': result.lyrics_content,
                     'lyrics_source_url': result.lyrics_source_url,
-                    'native_language': result.native_language
+                    'native_language': result.native_language,
+                    'story_type': result.story_type,
+                    'story_summary': result.story_summary,
+                    'story_details': result.story_details,
+                    'story_sources': result.story_sources,
+                    'story_confidence': result.story_confidence
                 }
 
                 with open(result_file_path, 'w', encoding='utf-8') as f:
