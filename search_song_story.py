@@ -48,19 +48,17 @@ from utils import get_default_llm_config, load_prompt_template, SearxngLimitingT
 
 logger = get_logger(__name__)
 
-
 class SongStory(BaseModel):
     """Structured output for song background story results."""
     song_title: str = Field(description="The song title in its native language")
     artist_name: str = Field(description="The artist name in its native language")
     native_language: str = Field(description="The native language of the song")
-    story_type: str = Field(description="Type of story found (e.g., 'anime_theme', 'tv_show_theme', 'creation_story')")
-    story_summary: str = Field(description="Detailed summary of the song's creation story")
+    story_type: str = Field(description="Base story of this song (e.g., 'anime', 'tv_show', 'movie'), empty if none")
+    creation_story: str = Field(description="Detailed summary of the song's creation story")
     background_story: Optional[str] = Field(default=None, description="If is a theme song, detailed description of the associated show/film")
     search_queries_used: List[str] = Field(description="List of search queries that were used")
     sources_used: List[str] = Field(description="List of sources/URLs used for the story")
-    reasoning: str = Field(description="Explanation of how the story was identified and verified")
-
+    reasoning: str = Field(description="Explanation of how the story was identified and verified, in English")
 
 class SongStorySearcher:
     """Class to search for song background stories using LLM and web search."""
@@ -185,7 +183,7 @@ class SongStorySearcher:
             logger.debug(f"Story result: {story_result}")
 
             # Validate required fields
-            if not story_result.story_summary:
+            if not story_result.creation_story:
                 logger.warning("Missing story summary in result")
                 return None
 
@@ -201,7 +199,7 @@ class SongStorySearcher:
             return None
 
 
-def search_song_story_from_identification(song_title: str, artist_name: str, native_language: str, paths: dict, force_recompute: bool = False, max_search_results: int = 5) -> Optional[Tuple[str, str, str, str, str, float]]:
+def search_song_story_from_identification(song_title: str, artist_name: str, native_language: str, paths: dict, force_recompute: bool = False, max_search_results: int = 5) -> Optional[Tuple[str, str, str, List[str], str]]:
     """
     Search for song background story with caching support.
 
@@ -213,7 +211,7 @@ def search_song_story_from_identification(song_title: str, artist_name: str, nat
         force_recompute (bool): If True, skip cache and always perform new search
 
     Returns:
-        Optional[Tuple]: (story_type, story_summary, story_details, sources_used, reasoning, confidence_score) if found, None otherwise
+        Optional[Tuple]: (story_type, creation_story, story_details, sources_used, reasoning) if found, None otherwise
     """
     result_file_path = str(paths.get('song_story', 'song_story_result.json'))
 
@@ -224,14 +222,17 @@ def search_song_story_from_identification(song_title: str, artist_name: str, nat
                 cached_result = json.load(f)
 
             # Validate cached result has required fields
-            if (cached_result.get('story_summary')):
-
+            if (cached_result.get('creation_story')):
                 logger.info(f"Loaded cached song story: {cached_result.get('story_type', 'Unknown')} for {song_title}")
-                return (cached_result.get('story_type', ''),
-                        cached_result.get('story_summary', ''),
-                        cached_result.get('background_story', ''),
-                        cached_result.get('sources_used', []),
-                        cached_result.get('reasoning', ''))
+                
+                # Dynamically extract fields based on expected return format
+                story_type = cached_result.get('story_type', '')
+                creation_story = cached_result.get('creation_story', '')
+                story_details = cached_result.get('story_details', '')
+                sources_used = cached_result.get('sources_used', [])
+                reasoning = cached_result.get('reasoning', '')
+                
+                return (story_type, creation_story, story_details, sources_used, reasoning)
 
         except Exception as e:
             logger.warning(f"Failed to load cached song story: {e}")
@@ -241,8 +242,8 @@ def search_song_story_from_identification(song_title: str, artist_name: str, nat
     result = searcher.search_song_story(song_title, artist_name, native_language)
 
     if result:
-        story_info = (result.story_type, result.story_summary,
-                     result.sources_used, result.reasoning)
+        story_info = (result.story_type, result.creation_story,
+                     result.background_story, result.sources_used, result.reasoning)
 
         # Save result if file path provided
         if result_file_path:
@@ -250,18 +251,8 @@ def search_song_story_from_identification(song_title: str, artist_name: str, nat
                 # Ensure directory exists
                 Path(result_file_path).parent.mkdir(parents=True, exist_ok=True)
 
-                # Save full result for future use
-                result_data = {
-                    'song_title': result.song_title,
-                    'artist_name': result.artist_name,
-                    'native_language': result.native_language,
-                    'story_type': result.story_type,
-                    'story_summary': result.story_summary,
-                    'background_story': result.background_story,
-                    'search_queries_used': result.search_queries_used,
-                    'sources_used': result.sources_used,
-                    'reasoning': result.reasoning
-                }
+                # Save full result for future use - dynamically create from SongStory model
+                result_data = result.model_dump()
 
                 with open(result_file_path, 'w', encoding='utf-8') as f:
                     json.dump(result_data, f, ensure_ascii=False, indent=2)
@@ -316,10 +307,9 @@ def main():
     result = search_song_story_from_identification(args.title, args.artist, args.language, paths, max_search_results=max_search_results)
 
     if result:
-        story_type, story_summary, story_details, background_story, sources_used, reasoning = result
+        story_type, creation_story, story_details, sources_used, reasoning = result
         print(f"Story Type: {story_type}")
-        print(f"Summary: {story_summary}")
-        print(f"Background Story: {background_story}")
+        print(f"Summary: {creation_story}")
         print(f"Details: {story_details}")
         if sources_used:
             print(f"Sources: {', '.join(sources_used)}")

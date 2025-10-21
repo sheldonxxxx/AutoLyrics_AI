@@ -510,6 +510,8 @@ def extract_web_content(text):
     # Remove URLs first
     text = re.sub(r'https?://\S+', '', text)
     text = re.sub(r'www\.\S+', '', text)
+    text = re.sub(r'--', '', text)
+    text = re.sub(r'|', '', text)
     
     lines = text.split('\n')
     cleaned_lines = []
@@ -522,7 +524,7 @@ def extract_web_content(text):
             continue
         
         # Remove ANY line containing brackets (link artifacts)
-        if re.search(r'[\[\]\(\)]', stripped):
+        if re.search(r'[\[\]]', stripped):
             continue
         
         # Remove lines with HTML/XML tags
@@ -530,12 +532,12 @@ def extract_web_content(text):
             continue
         
         # Remove lines starting with # (headers)
-        if stripped.startswith('#'):
-            continue
+        # if stripped.startswith('#'):
+        #     continue
         
         # Remove lines with markdown emphasis markers
-        if re.search(r'[\*_]{1,3}\S', stripped):
-            continue
+        # if re.search(r'[\*_]{1,3}\S', stripped):
+        #     continue
         
         # Remove lines with backticks (code)
         if '`' in stripped:
@@ -543,10 +545,6 @@ def extract_web_content(text):
         
         # Remove lines that are only dashes/asterisks/underscores (horizontal rules)
         if re.match(r'^[\-\*_\s]{3,}$', stripped):
-            continue
-        
-        # Remove lines with copyright
-        if re.search(r'©|Copyright|\(C\)', stripped, re.IGNORECASE):
             continue
         
         # Keep the line
