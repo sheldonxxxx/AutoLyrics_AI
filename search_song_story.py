@@ -32,6 +32,7 @@ Pipeline Stage: 2.5/6 (Story Search - After Song Identification)
 import os
 import logging
 import json
+import argparse
 from typing import List, Optional, Tuple
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -82,7 +83,7 @@ class SongStorySearcher:
 
         settings = ModelSettings(
             # max_tokens=5000,  # Avoid problematic long outputs
-            extra_body={"enable_thinking": False}
+            extra_body={"enable_thinking": False} # Qwen specific setting
         )
 
         # Create OpenAI model with the provider
@@ -126,6 +127,7 @@ class SongStorySearcher:
             toolsets=[self.limited_mcp_toolset],
             output_type=SongStory,
             instrument=instrumentation_settings,
+            instructions=load_prompt_template("song_story_search_prompt.txt"),
             retries=3
         )
 
@@ -146,25 +148,7 @@ class SongStorySearcher:
             return None
 
         try:
-            # Load prompt template from file
-            prompt_template_path = os.path.join(
-                os.path.dirname(__file__),
-                "prompt",
-                "song_story_search_prompt.txt"
-            )
-            prompt_template = load_prompt_template(prompt_template_path)
-
-            if not prompt_template:
-                logger.exception("Failed to load song story search prompt template")
-                return None
-
-            # Format the prompt with song information and JSON schema
-            user_prompt = prompt_template.format(
-                song_title=song_title,
-                artist_name=artist_name,
-                native_language=native_language,
-            )
-            logger.debug(f"Generated story search prompt length: {len(user_prompt)}")
+            user_prompt = f"song_title: {song_title}\nartist_name: {artist_name}\nnative_language: {native_language}\n"
 
             # Use Pydantic AI agent to run the story search with remote MCP server
             logger.info(f"Searching for background story of '{song_title}' by '{artist_name}'")
@@ -268,7 +252,7 @@ def search_song_story_from_identification(song_title: str, artist_name: str, nat
 
 def main():
     """Test function for song story search."""
-    import argparse
+    load_dotenv()
 
     parser = argparse.ArgumentParser(description='Search for song background story')
     parser.add_argument('--title', '-t', required=True, help='Song title')

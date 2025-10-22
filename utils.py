@@ -142,19 +142,26 @@ def ensure_output_directory(output_dir: str) -> bool:
         return False
 
 
-def load_prompt_template(prompt_file_path: str) -> str | None:
+def load_prompt_template(prompt_file: str, **kwargs) -> str | None:
     """
-    Load prompt template from file.
+    Load prompt template from file and format it with provided keyword arguments.
 
     Args:
         prompt_file_path (str): Path to the prompt template file
+        **kwargs: Keyword arguments for formatting the template
 
     Returns:
-        str | None: Content of the prompt template file, or None if error occurred
+        str | None: Formatted content of the prompt template file, or None if error occurred
     """
     try:
+            # Load prompt template from file
+        prompt_file_path = os.path.join(os.path.dirname(__file__), "prompt", prompt_file)
         with open(prompt_file_path, 'r', encoding='utf-8') as f:
-            return f.read()
+            template = f.read()
+        if kwargs:
+            return template.format(**kwargs)
+        else:
+            return template
     except Exception as e:
         logger.exception(f"Error loading prompt template from {prompt_file_path}: {e}")
         return None

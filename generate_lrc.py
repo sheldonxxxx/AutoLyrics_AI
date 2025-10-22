@@ -49,14 +49,11 @@ def generate_lrc_lyrics(lyrics_text, asr_transcript):
 
     # Load prompt template from file
     prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "lrc_generation_prompt.txt")
-    prompt_template = load_prompt_template(prompt_template_path)
+    prompt = load_prompt_template(prompt_template_path, lyrics_text=lyrics_text, lrc_transcript=lrc_transcript)
 
-    if not prompt_template:
+    if not prompt:
         logger.exception("Failed to load prompt template")
         return None
-
-    # Format the prompt with actual data
-    prompt = prompt_template.format(lyrics_text=lyrics_text, lrc_transcript=lrc_transcript)
 
     try:
         # Get configuration for pydantic_ai
@@ -110,15 +107,11 @@ def correct_grammar_in_transcript(asr_transcript, filename=None):
     lrc_transcript = convert_transcript_to_lrc(asr_transcript)
 
     # Load prompt template from file
-    prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "grammatical_correction_prompt.txt")
-    prompt_template = load_prompt_template(prompt_template_path)
+    prompt = load_prompt_template("grammatical_correction_prompt.txt", asr_transcript=lrc_transcript, filename=filename or "Unknown")
 
-    if not prompt_template:
+    if not prompt:
         logger.exception("Failed to load grammatical correction prompt template")
         return lrc_transcript  # Return original if prompt loading fails
-
-    # Format the prompt with actual data
-    prompt = prompt_template.format(asr_transcript=lrc_transcript, filename=filename or "Unknown")
 
     try:
         # Get configuration for pydantic_ai

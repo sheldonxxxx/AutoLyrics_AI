@@ -59,15 +59,11 @@ def translate_lrc_content(lrc_content, target_language="Traditional Chinese"):
         return None
 
     # Load prompt template from file
-    prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", prompt_file_name)
-    prompt_template = load_prompt_template(prompt_template_path)
+    prompt = load_prompt_template(prompt_file_name, target_language=target_language, lrc_content=lrc_content)
 
-    if not prompt_template:
+    if not prompt:
         logger.exception(f"Failed to load prompt template: {prompt_file_name}")
         return None
-
-    # Format the prompt with actual data
-    prompt = prompt_template.format(target_language=target_language, lrc_content=lrc_content)
 
     try:
         # Get configuration for pydantic_ai

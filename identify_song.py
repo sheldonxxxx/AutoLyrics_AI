@@ -141,18 +141,6 @@ class SongIdentifier:
             return None
 
         try:
-            # Load prompt template from file
-            prompt_template_path = os.path.join(
-                os.path.dirname(__file__),
-                "prompt",
-                "song_identification_prompt.txt"
-            )
-            prompt_template = load_prompt_template(prompt_template_path)
-
-            if not prompt_template:
-                logger.exception("Failed to load song identification prompt template")
-                return None
-
             # Generate JSON schema from SongIdentification model
             json_schema = SongIdentification.model_json_schema()
 
@@ -160,10 +148,11 @@ class SongIdentifier:
             cleaned_transcript = remove_timestamps_from_transcript(transcript)
 
             # Format the prompt with cleaned transcript and JSON schema
-            user_prompt = prompt_template.format(
-                transcript=cleaned_transcript,  # Limit and clean input
-                json_schema=json.dumps(json_schema, indent=2)
-            )
+            user_prompt = load_prompt_template("song_identification_prompt.txt", transcript=cleaned_transcript, json_schema=json.dumps(json_schema, indent=2))
+
+            if not user_prompt:
+                logger.exception("Failed to load song identification prompt template")
+                return None
             logger.debug(f"Generated prompt length: {len(user_prompt)}")
 
             # Use Pydantic AI agent to run the identification with remote MCP server
@@ -238,12 +227,6 @@ class SongIdentifier:
                 "prompt",
                 "song_identification_with_metadata_prompt.txt"
             )
-            prompt_template = load_prompt_template(prompt_template_path)
-
-            if not prompt_template:
-                logger.exception("Failed to load song identification with metadata prompt template")
-                return None
-
             # Generate JSON schema from SongIdentification model
             json_schema = SongIdentification.model_json_schema()
 
@@ -251,13 +234,11 @@ class SongIdentifier:
             cleaned_transcript = remove_timestamps_from_transcript(transcript)
 
             # Format the prompt with metadata, cleaned transcript and JSON schema
-            user_prompt = prompt_template.format(
-                title=metadata.get('title', ''),
-                artist=metadata.get('artist', ''),
-                album=metadata.get('album', ''),
-                transcript=cleaned_transcript[:2000],  # Limit and clean input
-                json_schema=json.dumps(json_schema, indent=2)
-            )
+            user_prompt = load_prompt_template(prompt_template_path, title=metadata.get('title', ''), artist=metadata.get('artist', ''), album=metadata.get('album', ''), transcript=cleaned_transcript[:2000], json_schema=json.dumps(json_schema, indent=2))
+
+            if not user_prompt:
+                logger.exception("Failed to load song identification with metadata prompt template")
+                return None
             logger.debug(f"Generated metadata prompt length: {len(user_prompt)}")
 
             # Use Pydantic AI agent to run the identification with remote MCP server

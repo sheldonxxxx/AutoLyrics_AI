@@ -46,17 +46,14 @@ def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str 
         str | None: Corrected LRC content with fixed timestamps, or None if error
     """
     # Load prompt template from file
-    prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "lrc_timestamp_verification_prompt.txt")
-    prompt_template = load_prompt_template(prompt_template_path)
-
-    if not prompt_template:
-        logger.exception("Failed to load timestamp verification prompt template")
-        return None
-
     asr_transcript = convert_transcript_to_lrc(asr_transcript)
     
     # Format the prompt with actual data
-    prompt = prompt_template.format(lrc_content=lrc_content, asr_transcript=asr_transcript)
+    prompt = load_prompt_template("lrc_timestamp_verification_prompt.txt", lrc_content=lrc_content, asr_transcript=asr_transcript)
+
+    if not prompt:
+        logger.exception("Failed to load timestamp verification prompt template")
+        return None
 
     try:
         # Get configuration for pydantic_ai

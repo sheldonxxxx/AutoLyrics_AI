@@ -28,7 +28,6 @@ import sys
 import logging
 import logfire
 
-
 class ColoredFormatter(logging.Formatter):
     """A custom formatter that adds colors to log messages based on log level."""
 
@@ -90,7 +89,7 @@ def setup_logging(level=logging.INFO, log_file=None, log_format=None, clear_hand
     if enable_logfire:
         try:
             logfire.configure(
-                environment=os.getenv('LOGFIRE_ENVIRONMENT', 'development'),
+                # environment=os.getenv('LOGFIRE_ENVIRONMENT', 'development'),
                 token=os.getenv('LOGFIRE_WRITE_TOKEN'),
                 console=False  # Disable console output from Logfire
             )
