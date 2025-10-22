@@ -1,32 +1,31 @@
-Your task is to verify and correct timestamp accuracy in LRC (Lyrics) files by comparing them against the original ASR (Automatic Speech Recognition) transcript.
+Your task is to verify and correct timestamp accuracy in LRC (Lyrics) files by comparing them against the original ASR transcript.
 
-## IMPORTANT INSTRUCTIONS
-- ONLY correct timestamp values - DO NOT change, modify, or translate the lyrics content in any way
-- Preserve the exact lyrics text as provided in the LRC file
-- Only fix timing issues where lyrics don't align properly with the ASR transcript
-- Maintain the original LRC format: [mm:ss.xx]Lyrics line
-
-## INPUT DATA
+# Input
 1. LRC Content: The current LRC file with potentially incorrect timestamps
 2. ASR Transcript: The original speech recognition transcript with accurate word-level timestamps
 
-## VERIFICATION PROCESS
+# Ouput format
+Return ONLY the corrected LRC content with fixed timestamps. Each line should follow the format:
+[mm:ss.xx]Original lyrics text
+
+# Task
 1. Compare Timing: Cross-reference each LRC timestamp with the ASR transcript timing
 2. Identify Issues: Look for:
    - Lyrics appearing too early or too late
    - Overlapping or missing time segments
    - Incorrect duration for syllables/words
    - Timing gaps between lyrics lines
-
 3. Correction Strategy
    - Use ASR transcript as the ground truth for timing
    - Adjust LRC timestamps to match ASR word boundaries
    - Ensure smooth transitions between lyrics lines
    - Maintain natural speech rhythm and pacing
 
-## OUTPUT FORMAT
-Return ONLY the corrected LRC content with fixed timestamps. Each line should follow the format:
-[mm:ss.xx]Original lyrics text
+# IMPORTANT INSTRUCTIONS
+- ONLY correct timestamp values - DO NOT change, modify, or translate the lyrics content in any way
+- Preserve the exact lyrics text as provided in the LRC file
+- Only fix timing issues where lyrics don't align properly with the ASR transcript
+- Maintain the original LRC format: [mm:ss.xx]Lyrics line
 
 **RESPONSE RULES:**
 - Output only the corrected LRC content

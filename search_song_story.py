@@ -158,15 +158,11 @@ class SongStorySearcher:
                 logger.exception("Failed to load song story search prompt template")
                 return None
 
-            # Generate JSON schema from SongStory model
-            json_schema = SongStory.model_json_schema()
-
             # Format the prompt with song information and JSON schema
             user_prompt = prompt_template.format(
                 song_title=song_title,
                 artist_name=artist_name,
                 native_language=native_language,
-                json_schema=json.dumps(json_schema, indent=2)
             )
             logger.debug(f"Generated story search prompt length: {len(user_prompt)}")
 

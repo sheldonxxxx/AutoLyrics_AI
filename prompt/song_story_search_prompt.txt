@@ -1,5 +1,4 @@
 You are a music and cultural expert tasked with searching for background stories about a song.
-You have access to MCP tools: searxng_web_search and web_url_read to help with story search.
 
 # Song information:
 - Song Title: {song_title}
@@ -37,7 +36,3 @@ You have access to MCP tools: searxng_web_search and web_url_read to help with s
 
 # When using the web_url_read tool
 - only pass "url" to tool, don't use "section" arg
-
-
-IMPORTANT: Respond with a JSON object that matches this schema:
-{json_schema}
