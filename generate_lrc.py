@@ -18,7 +18,6 @@ Pipeline Stage: 5/6 (LRC Generation)
 """
 
 import os
-from dotenv import load_dotenv
 import logging
 from logging_config import setup_logging, get_logger
 from utils import load_prompt_template, read_file, convert_transcript_to_lrc, get_default_llm_config
@@ -27,9 +26,6 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 logger = get_logger(__name__)
-
-# Load environment variables from .env file
-load_dotenv()
 
 def generate_lrc_lyrics(lyrics_text, asr_transcript):
     """
@@ -48,8 +44,7 @@ def generate_lrc_lyrics(lyrics_text, asr_transcript):
     lrc_transcript = convert_transcript_to_lrc(asr_transcript)
 
     # Load prompt template from file
-    prompt_template_path = os.path.join(os.path.dirname(__file__), "prompt", "lrc_generation_prompt.txt")
-    prompt = load_prompt_template(prompt_template_path, lyrics_text=lyrics_text, lrc_transcript=lrc_transcript)
+    prompt = load_prompt_template("lrc_generation_prompt.txt", lyrics_text=lyrics_text, lrc_transcript=lrc_transcript)
 
     if not prompt:
         logger.exception("Failed to load prompt template")
@@ -151,6 +146,10 @@ def correct_grammar_in_transcript(asr_transcript, filename=None):
         return asr_transcript  # Return original if correction fails
 
 def main():
+    # Load environment variables from .env file
+    from dotenv import load_dotenv
+    load_dotenv()
+
     # Set up argument parser
     import argparse
     parser = argparse.ArgumentParser(description='Generate LRC format lyrics by combining downloaded lyrics and ASR output using an OpenAI-compatible API via Pydantic AI.')

@@ -32,15 +32,15 @@ import time
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
-import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+from dotenv import load_dotenv
 
 from logging_config import setup_logging, get_logger
 from extract_metadata import extract_metadata
 from separate_vocals import separate_vocals
-from transcribe_vocals_stable import transcribe_with_timestamps, normalize_audio
-from generate_lrc import read_file, generate_lrc_lyrics, correct_grammar_in_transcript
+from transcribe_vocals_stable import transcribe_with_timestamps
+from generate_lrc import read_file, generate_lrc_lyrics
 from verify_and_correct_timestamps import verify_and_correct_timestamps
 from translate_lrc import translate_lrc_content
 from identify_song import identify_song_from_asr
@@ -834,6 +834,9 @@ def process_single_audio_file(
 
 def main():
     """Main function to process all audio files (FLAC and MP3) in a directory and output results to CSV."""
+    # Load environment variables from .env file
+    load_dotenv()
+
     parser = argparse.ArgumentParser(
         description='Process all audio files (FLAC and MP3) in a folder (recursive) to create LRC files with translation. Outputs detailed results to CSV.'
     )

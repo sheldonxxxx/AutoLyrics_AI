@@ -316,18 +316,18 @@ def remove_timestamps_from_transcript(transcript: str) -> str:
     logger.debug(f"Removed timestamps from transcript: {len(transcript)} -> {len(cleaned_transcript)} characters")
     return cleaned_transcript
 
-def get_prompt_file_for_language(target_language: str, explanation: bool = False) -> str:
+def get_prompt_file_for_language(target_language: str, task: str) -> str:
     """
     Get the appropriate prompt file name for the target language.
 
     Args:
         target_language (str): Target language for translation/explanation
-        explanation (bool): Whether to get explanation prompts (True) or translation prompts (False)
+        task (str): Task type, either "translation" or "explanation"
 
     Returns:
         str: Prompt file name for the language
     """
-    if explanation:
+    if task == "explanation":
         # Map language names to explanation prompt file names
         language_prompt_map = {
             "Traditional Chinese": "lrc_explanation_traditional_chinese_prompt.txt",

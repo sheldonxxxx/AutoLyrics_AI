@@ -167,6 +167,10 @@ def extract_metadata(file_path):
     return metadata
 
 def main():
+    # Load environment variables from .env file
+    from dotenv import load_dotenv
+    load_dotenv()
+
     # Set up argument parser
     import argparse
     parser = argparse.ArgumentParser(description='Extract song name and artist name from audio file metadata.')

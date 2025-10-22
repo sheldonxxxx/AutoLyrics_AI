@@ -35,7 +35,6 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.mcp import MCPServerStreamableHTTP, MCPServerStdio
 from pydantic_ai.models.instrumented import InstrumentationSettings
-from dotenv import load_dotenv
 from logging_config import get_logger
 from utils import get_default_llm_config, load_prompt_template, remove_timestamps_from_transcript, SearxngLimitingToolset
 from search_song_story import search_song_story_from_identification
@@ -66,8 +65,6 @@ class SongIdentifier:
         Args:
             max_search_results: Maximum number of search results to return (default: 5)
         """
-        load_dotenv()
-
         # Get OpenAI configuration using utility function
         config = get_default_llm_config()
 
@@ -404,6 +401,10 @@ def identify_song_from_asr(transcript: str, paths: Path, force_recompute: bool =
 
 def main():
     """Test function for song identification."""
+    # Load environment variables from .env file
+    from dotenv import load_dotenv
+    load_dotenv()
+
     import argparse
 
     parser = argparse.ArgumentParser(description='Identify song from ASR transcript')

@@ -23,13 +23,7 @@ Pipeline Stage: Enhancement (Optional post-processing step)
 """
 
 import os
-import argparse
 import logging
-import re
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 from logging_config import setup_logging, get_logger
 from utils import (load_prompt_template, 
@@ -64,7 +58,7 @@ def explain_lyrics_content(lrc_content, target_language="Traditional Chinese"):
         return None
 
     # Get the appropriate prompt file for the target language
-    prompt_file_name = get_prompt_file_for_language(target_language, explanation=True)
+    prompt_file_name = get_prompt_file_for_language(target_language, "explanation")
     if not prompt_file_name:
         logger.exception(f"No prompt file configured for language: {target_language}")
         return None
@@ -161,6 +155,10 @@ def main(input_path, output_path, target_language, log_level=logging.INFO, logfi
 
 
 if __name__ == "__main__":
+    import dotenv
+    dotenv.load_dotenv()
+
+    import argparse
     parser = argparse.ArgumentParser(description='Explain LRC lyrics in target language')
     parser.add_argument('input', nargs='?', help='Input LRC file path')
     parser.add_argument('-o', '--output', help='Output explanation file path')

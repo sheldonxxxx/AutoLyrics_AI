@@ -320,6 +320,10 @@ def process_batch(input_dir: Path, output_dir: Path, args) -> int:
     return successful
 
 def main():
+    # Load environment variables from .env file
+    from dotenv import load_dotenv
+    load_dotenv()
+
     # Set up argument parser
     import argparse
     parser = argparse.ArgumentParser(description='Transcribe vocals with timestamped transcription using stable-ts.')

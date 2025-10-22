@@ -73,6 +73,10 @@ def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str =
         return None
 
 def main():
+    # Load environment variables from .env file
+    from dotenv import load_dotenv
+    load_dotenv()
+
     # Set up argument parser
     import argparse
     parser = argparse.ArgumentParser(description='Extract vocals from audio files using audio-separator (UVR).')

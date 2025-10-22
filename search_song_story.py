@@ -32,7 +32,6 @@ Pipeline Stage: 2.5/6 (Story Search - After Song Identification)
 import os
 import logging
 import json
-import argparse
 from typing import List, Optional, Tuple
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -43,7 +42,6 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.mcp import MCPServerStreamableHTTP, MCPServerStdio
 from pydantic_ai.models.instrumented import InstrumentationSettings
-from dotenv import load_dotenv
 from logging_config import get_logger
 from utils import get_default_llm_config, load_prompt_template, SearxngLimitingToolset
 
@@ -70,8 +68,6 @@ class SongStorySearcher:
         Args:
             max_search_results: Maximum number of search results to return (default: 5)
         """
-        load_dotenv()
-
         # Get OpenAI configuration using utility function
         config = get_default_llm_config()
 
@@ -252,8 +248,10 @@ def search_song_story_from_identification(song_title: str, artist_name: str, nat
 
 def main():
     """Test function for song story search."""
-    load_dotenv()
+    import dotenv
+    dotenv.load_dotenv()
 
+    import argparse
     parser = argparse.ArgumentParser(description='Search for song background story')
     parser.add_argument('--title', '-t', required=True, help='Song title')
     parser.add_argument('--artist', '-a', required=True, help='Artist name')
@@ -274,7 +272,7 @@ def main():
     from logging_config import setup_logging
     setup_logging(level=log_level, enable_logfire=args.logfire)
 
-    print(f"Searching for background story of '{args.title}' by '{args.artist}'...")
+    logger.info(f"Searching for background story of '{args.title}' by '{args.artist}'...")
 
     # Get max search results from command line arg or environment variable
     max_search_results = args.max_search_results
@@ -287,15 +285,10 @@ def main():
     result = search_song_story_from_identification(args.title, args.artist, args.language, paths, max_search_results=max_search_results)
 
     if result:
-        story_type, creation_story, story_details, sources_used, reasoning = result
-        print(f"Story Type: {story_type}")
-        print(f"Summary: {creation_story}")
-        print(f"Details: {story_details}")
-        if sources_used:
-            print(f"Sources: {', '.join(sources_used)}")
+        logger.info("Successfully retrieved song story")
         return 0
     else:
-        print("Could not find background story for the song")
+        logger.info("Could not find background story for the song")
         return 1
 
 

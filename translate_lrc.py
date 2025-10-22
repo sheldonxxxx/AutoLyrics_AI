@@ -24,10 +24,6 @@ Pipeline Stage: 6/6 (Translation)
 import os
 import argparse
 import logging
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 from logging_config import setup_logging, get_logger
 from utils import load_prompt_template, read_file, validate_lrc_content, get_prompt_file_for_language, get_translation_config

@@ -18,7 +18,6 @@ Pipeline Stage: 5.5/6 (Timestamp Verification and Correction)
 """
 
 import os
-from dotenv import load_dotenv
 import logging
 from logging_config import setup_logging, get_logger
 from utils import load_prompt_template, get_default_llm_config, convert_transcript_to_lrc
@@ -27,9 +26,6 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 logger = get_logger(__name__)
-
-# Load environment variables from .env file
-load_dotenv()
 
 def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str | None:
     """
@@ -95,6 +91,10 @@ def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str 
 
 def main():
     """Main function for command-line usage of timestamp verification."""
+    # Load environment variables from .env file
+    from dotenv import load_dotenv
+    load_dotenv()
+
     import argparse
     parser = argparse.ArgumentParser(description='Verify and correct LRC file timestamps using ASR transcript as reference via Pydantic AI.')
     parser.add_argument('--lrc-file', '-l',
