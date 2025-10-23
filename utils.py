@@ -23,13 +23,12 @@ Used By: All pipeline modules for shared functionality
 """
 import os
 import re
+import argparse
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional
 from types import SimpleNamespace
-from pydantic_ai.toolsets import WrapperToolset
 
 from logging_config import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -50,20 +49,27 @@ def find_audio_files(input_dir: str) -> List[Path]:
         return []
 
     # Find audio files with common extensions
-    audio_extensions = ['*.flac', '*.mp3', '*.wav', '*.m4a', '*.aac', '*.ogg', '*.wma']
+    audio_extensions = ["*.flac", "*.mp3", "*.wav", "*.m4a", "*.aac", "*.ogg", "*.wma"]
     audio_files = []
     for ext in audio_extensions:
         audio_files.extend(list(input_path.rglob(ext)))
 
     # Filter out macOS resource fork files and other system files starting with '._'
-    filtered_audio_files = [f for f in audio_files if not f.name.startswith('._')]
+    filtered_audio_files = [f for f in audio_files if not f.name.startswith("._")]
 
-    supported_formats = ', '.join(ext[1:] for ext in audio_extensions)
-    logger.info(f"Found {len(filtered_audio_files)} audio files ({supported_formats}) in {input_dir} (filtered out {len(audio_files) - len(filtered_audio_files)} system files)")
+    supported_formats = ", ".join(ext[1:] for ext in audio_extensions)
+    logger.info(
+        f"Found {len(filtered_audio_files)} audio files ({supported_formats}) in {input_dir} (filtered out {len(audio_files) - len(filtered_audio_files)} system files)"
+    )
     return filtered_audio_files
 
 
-def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str = "tmp", input_base_dir: str = "input") -> dict:
+def get_output_paths(
+    input_file: Path,
+    output_dir: str = "output",
+    temp_dir: str = "tmp",
+    input_base_dir: str = "input",
+) -> dict:
     """
     Generate output file paths based on the input file path, preserving nested folder structure.
     Creates a song-specific folder within the temp directory to organize all intermediate files.
@@ -101,7 +107,9 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
 
     except ValueError:
         # If input_file is not relative to input_base_dir, use flat structure
-        logger.warning(f"Input file {input_file} is not relative to {input_base_dir}, using flat structure")
+        logger.warning(
+            f"Input file {input_file} is not relative to {input_base_dir}, using flat structure"
+        )
         nested_temp_path = temp_path
         nested_output_path = output_path
 
@@ -110,17 +118,19 @@ def get_output_paths(input_file: Path, output_dir: str = "output", temp_dir: str
         song_folder.mkdir(parents=True, exist_ok=True)
 
     return {
-        'vocals_wav': song_folder / f"{filename_stem}_vocal.wav",
-        'normalized_vocals_wav': song_folder / f"{filename_stem}_vocal_normalized.wav",
-        'transcript_txt': song_folder / f"{filename_stem}_transcript.txt",
-        'transcript_word_txt': song_folder / f"{filename_stem}_transcript_word.txt",
-        'corrected_transcript_txt': song_folder / f"{filename_stem}_corrected_transcript.txt",
-        'song_identification': song_folder / f"{filename_stem}_song_identification.json",
-        'lyrics_txt': song_folder / f"{filename_stem}_lyrics.txt",
-        'lrc': song_folder / f"{filename_stem}.lrc",
-        'explanation_txt': song_folder / f"{filename_stem}_explanation.md",
-        'corrected_lrc': song_folder / f"{filename_stem}_corrected.lrc",
-        'translated_lrc': nested_output_path / f"{filename_stem}.lrc"
+        "vocals_wav": song_folder / f"{filename_stem}_vocal.wav",
+        "normalized_vocals_wav": song_folder / f"{filename_stem}_vocal_normalized.wav",
+        "transcript_txt": song_folder / f"{filename_stem}_transcript.txt",
+        "transcript_word_txt": song_folder / f"{filename_stem}_transcript_word.txt",
+        "corrected_transcript_txt": song_folder
+        / f"{filename_stem}_corrected_transcript.txt",
+        "song_identification": song_folder
+        / f"{filename_stem}_song_identification.json",
+        "lyrics_txt": song_folder / f"{filename_stem}_lyrics.txt",
+        "lrc": song_folder / f"{filename_stem}.lrc",
+        "explanation_txt": song_folder / f"{filename_stem}_explanation.md",
+        "corrected_lrc": song_folder / f"{filename_stem}_corrected.lrc",
+        "translated_lrc": nested_output_path / f"{filename_stem}.lrc",
     }
 
 
@@ -154,9 +164,11 @@ def load_prompt_template(prompt_file: str, **kwargs) -> str | None:
         str | None: Formatted content of the prompt template file, or None if error occurred
     """
     try:
-            # Load prompt template from file
-        prompt_file_path = os.path.join(os.path.dirname(__file__), "prompt", prompt_file)
-        with open(prompt_file_path, 'r', encoding='utf-8') as f:
+        # Load prompt template from file
+        prompt_file_path = os.path.join(
+            os.path.dirname(__file__), "prompt", prompt_file
+        )
+        with open(prompt_file_path, "r", encoding="utf-8") as f:
             template = f.read()
         if kwargs:
             return template.format(**kwargs)
@@ -177,9 +189,10 @@ def read_file(file_path: str) -> str:
     Returns:
         str: Content of the LRC file
     """
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
-    
+
+
 def write_file(file_path: str, content: str) -> bool:
     """
     Write content to a file.
@@ -192,12 +205,13 @@ def write_file(file_path: str, content: str) -> bool:
         bool: True if writing was successful, False otherwise
     """
     try:
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
         return True
     except Exception as e:
         logger.exception(f"Error writing to file {file_path}: {e}")
         return False
+
 
 def validate_lrc_content(content: str) -> bool:
     """
@@ -209,7 +223,7 @@ def validate_lrc_content(content: str) -> bool:
     Returns:
         bool: True if content is valid LRC format, False otherwise
     """
-    lines = content.strip().split('\n')
+    lines = content.strip().split("\n")
 
     # Check if we have at least one line
     if not lines or not lines[0].strip():
@@ -217,7 +231,7 @@ def validate_lrc_content(content: str) -> bool:
         return False
 
     # Check for proper LRC timestamp format in at least some lines
-    timestamp_pattern = r'\[([0-9]{2,3}:[0-9]{2}\.[0-9]{2,3}|[0-9]{2,3}:[0-9]{2})\]'
+    timestamp_pattern = r"\[([0-9]{2,3}:[0-9]{2}\.[0-9]{2,3}|[0-9]{2,3}:[0-9]{2})\]"
     has_timestamps = any(re.search(timestamp_pattern, line) for line in lines)
 
     if not has_timestamps:
@@ -240,12 +254,13 @@ def convert_transcript_to_lrc(transcript_text: str) -> str:
         str: Transcript in LRC format
     """
     import re
-    lines = transcript_text.split('\n')
+
+    lines = transcript_text.split("\n")
     lrc_lines = []
 
     for line in lines:
         # Match timestamp format like [0.92s -> 4.46s] ああ 素晴らしき世界に今日も乾杯
-        match = re.match(r'\[([\d.]+)s -> ([\d.]+)s\]\s*(.*)', line.strip())
+        match = re.match(r"\[([\d.]+)s -> ([\d.]+)s\]\s*(.*)", line.strip())
         if match:
             start_time = float(match.group(1))
             end_time = float(match.group(2))
@@ -256,10 +271,10 @@ def convert_transcript_to_lrc(transcript_text: str) -> str:
                 minutes = int(start_time // 60)
                 seconds = int(start_time % 60)
                 hundredths = int((start_time % 1) * 100)
-                lrc_line = f'[{minutes:02d}:{seconds:02d}.{hundredths:02d}]{text}'
+                lrc_line = f"[{minutes:02d}:{seconds:02d}.{hundredths:02d}]{text}"
                 lrc_lines.append(lrc_line)
 
-    return '\n'.join(lrc_lines)
+    return "\n".join(lrc_lines)
 
 
 def parse_transcript_segments(transcript_content: str) -> List[SimpleNamespace]:
@@ -273,12 +288,13 @@ def parse_transcript_segments(transcript_content: str) -> List[SimpleNamespace]:
         List[SimpleNamespace]: List of transcript segments with start, end, and text
     """
     import re
-    lines = transcript_content.split('\n')
+
+    lines = transcript_content.split("\n")
     segments = []
 
     for line in lines:
         # Match timestamp format like [0.92s -> 4.46s] ああ 素晴らしき世界に今日も乾杯
-        match = re.match(r'\[([\d.]+)s -> ([\d.]+)s\]\s*(.*)', line.strip())
+        match = re.match(r"\[([\d.]+)s -> ([\d.]+)s\]\s*(.*)", line.strip())
         if match:
             start_time = float(match.group(1))
             end_time = float(match.group(2))
@@ -306,15 +322,18 @@ def remove_timestamps_from_transcript(transcript: str) -> str:
     # [00:00.00] format, [00:00] format, (00:00.00) format, (00:00) format
     # Also handle formats like 00:00.00 - Word or 00:00 - Word
     patterns = [
-        r'\[.*?\]',  # Match anything contained within square brackets
+        r"\[.*?\]",  # Match anything contained within square brackets
     ]
 
     cleaned_transcript = transcript
     for pattern in patterns:
-        cleaned_transcript = re.sub(pattern, '', cleaned_transcript, flags=re.MULTILINE)
+        cleaned_transcript = re.sub(pattern, "", cleaned_transcript, flags=re.MULTILINE)
 
-    logger.debug(f"Removed timestamps from transcript: {len(transcript)} -> {len(cleaned_transcript)} characters")
+    logger.debug(
+        f"Removed timestamps from transcript: {len(transcript)} -> {len(cleaned_transcript)} characters"
+    )
     return cleaned_transcript
+
 
 def get_prompt_file_for_language(target_language: str, task: str) -> str:
     """
@@ -346,7 +365,9 @@ def get_prompt_file_for_language(target_language: str, task: str) -> str:
             # "Japanese": "lrc_japanese_prompt.txt",
         }
         # Use specific prompt if available, otherwise use generic prompt
-        return language_prompt_map.get(target_language, "lrc_generic_translation_prompt.txt")
+        return language_prompt_map.get(
+            target_language, "lrc_generic_translation_prompt.txt"
+        )
 
 
 def write_csv_results(csv_file_path: str, results: list) -> bool:
@@ -367,42 +388,57 @@ def write_csv_results(csv_file_path: str, results: list) -> bool:
         return False
 
     try:
-        with open(csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+        with open(csv_file_path, "w", newline="", encoding="utf-8") as csvfile:
             # Define CSV columns based on our data structure
             fieldnames = [
                 # File information
-                'filename', 'file_path', 'processing_start_time',
-
+                "filename",
+                "file_path",
+                "processing_start_time",
                 # Metadata extraction results
-                'metadata_success', 'metadata_title', 'metadata_artist', 'metadata_album',
-                'metadata_genre', 'metadata_year', 'metadata_track_number',
-
+                "metadata_success",
+                "metadata_title",
+                "metadata_artist",
+                "metadata_album",
+                "metadata_genre",
+                "metadata_year",
+                "metadata_track_number",
                 # Vocal separation results
-                'vocals_separation_success', 'vocals_file_path', 'vocals_file_size',
-
+                "vocals_separation_success",
+                "vocals_file_path",
+                "vocals_file_size",
                 # Transcription results
-                'transcription_success', 'transcription_segments_count', 'transcription_duration',
-
+                "transcription_success",
+                "transcription_segments_count",
+                "transcription_duration",
                 # Lyrics search results
-                'lyrics_search_success', 'lyrics_source', 'lyrics_length', 'lyrics_line_count',
-
+                "lyrics_search_success",
+                "lyrics_source",
+                "lyrics_length",
+                "lyrics_line_count",
                 # Grammatical correction results
-                'grammatical_correction_success', 'grammatical_correction_applied',
-
+                "grammatical_correction_success",
+                "grammatical_correction_applied",
                 # LRC generation results
-                'lrc_generation_success', 'lrc_line_count', 'lrc_has_timestamps',
-
+                "lrc_generation_success",
+                "lrc_line_count",
+                "lrc_has_timestamps",
                 # Timestamp verification results
-                'timestamp_verification_success', 'timestamp_corrections_applied', 'corrected_lrc_path',
-
+                "timestamp_verification_success",
+                "timestamp_corrections_applied",
+                "corrected_lrc_path",
                 # Translation results
-                'translation_success', 'translation_target_language',
-
+                "translation_success",
+                "translation_target_language",
                 # Explanation results
-                'explanation_success', 'explanation_target_language', 'explanation_length',
-
+                "explanation_success",
+                "explanation_target_language",
+                "explanation_length",
                 # Overall results
-                'overall_success', 'processing_end_time', 'processing_duration_seconds', 'error_message'
+                "overall_success",
+                "processing_end_time",
+                "processing_duration_seconds",
+                "error_message",
             ]
 
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -422,7 +458,9 @@ def write_csv_results(csv_file_path: str, results: list) -> bool:
         return False
 
 
-def validate_environment_variables(required_vars: List[str], optional_vars: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+def validate_environment_variables(
+    required_vars: List[str], optional_vars: Optional[Dict[str, str]] = None
+) -> Dict[str, str]:
     """
     Validate that required environment variables are set and optionally check optional ones.
 
@@ -509,85 +547,40 @@ def get_translation_config() -> Dict[str, str]:
 
     return config
 
-def extract_web_content(text):
+
+def get_base_argparser(
+    description: str, search: bool = False
+) -> argparse.ArgumentParser:
     """
-    Aggressively remove all lines containing any markdown, HTML, or link syntax.
+    Create a base argument parser with common arguments.
+
+    Returns:
+        argparse.ArgumentParser: Configured argument parser
     """
-    
-    # Remove URLs first
-    text = re.sub(r'https?://\S+', '', text)
-    text = re.sub(r'www\.\S+', '', text)
-    text = re.sub(r'--', '', text)
-    text = re.sub(r'|', '', text)
-    
-    lines = text.split('\n')
-    cleaned_lines = []
-    
-    for line in lines:
-        stripped = line.strip()
-        
-        # Skip empty lines
-        if not stripped:
-            continue
-        
-        # Remove ANY line containing brackets (link artifacts)
-        if re.search(r'[\[\]]', stripped):
-            continue
-        
-        # Remove lines with HTML/XML tags
-        if re.search(r'<[^>]*>', stripped):
-            continue
-        
-        # Remove lines starting with # (headers)
-        # if stripped.startswith('#'):
-        #     continue
-        
-        # Remove lines with markdown emphasis markers
-        # if re.search(r'[\*_]{1,3}\S', stripped):
-        #     continue
-        
-        # Remove lines with backticks (code)
-        if '`' in stripped:
-            continue
-        
-        # Remove lines that are only dashes/asterisks/underscores (horizontal rules)
-        if re.match(r'^[\-\*_\s]{3,}$', stripped):
-            continue
-        
-        # Keep the line
-        cleaned_lines.append(stripped)
-    
-    # Join and clean up
-    result = '\n'.join(cleaned_lines)
-    result = re.sub(r'\n{3,}', '\n\n', result)
-    
-    return result.strip()
 
-class SearxngLimitingToolset(WrapperToolset):
-    """Custom wrapper toolset to limit SearXNG search results."""
+    parser = argparse.ArgumentParser(
+        description=description,
+    )
 
-    def __init__(self, wrapped, max_results: int = 5):
-        """Initialize with configurable result limit.
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level (default: INFO)",
+    )
 
-        Args:
-            wrapped: The underlying toolset to wrap
-            max_results: Maximum number of search results to return (default: 5)
-        """
-        super().__init__(wrapped)
-        self.max_results = max_results
+    parser.add_argument(
+        "--logfire",
+        action="store_true",
+        help="Enable Logfire logging if set",
+    )
 
-    async def call_tool(self, name: str, tool_args: dict[str, Any], ctx, tool) -> Any:
-        """Intercept tool calls and limit SearXNG results."""
-        # Call the original tool first
-        result = await super().call_tool(name, tool_args, ctx, tool)
+    if search:
+        parser.add_argument(
+            "--max-search-results",
+            type=int,
+            default=5,
+            help="Maximum number of search results to return (default: 5)",
+        )
 
-        # If this is a SearXNG search tool, limit results
-        if name == "searxng_web_search":
-            result_list = result.split('\n\n')
-            logger.info(f"Limiting SearXNG results from {len(result_list)} to {self.max_results}")
-            # Return only the first max_results results
-            return '\n\n'.join(result_list[:self.max_results])
-        elif name == "web_url_read":
-            result = extract_web_content(result)
-
-        return result
+    return parser

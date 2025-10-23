@@ -29,9 +29,10 @@ from ffmpeg_normalize import FFmpegNormalize
 import stable_whisper
 from stable_whisper.audio import load_audio
 from typing import List
-from utils import find_audio_files
+from utils import find_audio_files, get_base_argparser
 
 logger = get_logger(__name__)
+
 
 class Segment:
     def __init__(self, start, end, text):
@@ -39,15 +40,18 @@ class Segment:
         self.end = end
         self.text = text
 
+
 def _is_mlx_available():
     """Check if MLX components are available for use."""
     try:
         # Try to import mlx_whisper package directly
         import mlx_whisper
+
         return True
     except ImportError:
         return False
-    
+
+
 def detect_language(model, audio, start=30, duration=30):
     """
     Detect the language of the audio using a segment.
@@ -63,9 +67,14 @@ def detect_language(model, audio, start=30, duration=30):
     """
     start = start * stable_whisper.whisper_compatibility.SAMPLE_RATE
     end = start + duration * stable_whisper.whisper_compatibility.SAMPLE_RATE
-    return model.transcribe(audio[start:end], language=None, verbose=None, only_voice_freq=True).language
+    return model.transcribe(
+        audio[start:end], language=None, verbose=None, only_voice_freq=True
+    ).language
 
-def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="cpu", use_mlx=None):
+
+def transcribe_with_timestamps(
+    audio_file_path, model_size="large-v3", device="cpu", use_mlx=None
+):
     """
     Transcribe an audio file with timestamped transcription using stable-ts.
 
@@ -89,7 +98,9 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             use_mlx = True
             logger.info("MLX components detected, using MLX models for optimization")
         elif use_mlx and not have_mlx:
-            logger.error("Please install stable-ts with MLX support using: uv add stable-ts[mlx]")
+            logger.error(
+                "Please install stable-ts with MLX support using: uv add stable-ts[mlx]"
+            )
             return []
 
         # Load the model based on device and MLX preference
@@ -99,20 +110,24 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         else:
             logger.info(f"Loading standard Whisper model: {model_size} on {device}")
             model = stable_whisper.load_model(model_size, device=device)
-            
+
         audio = load_audio(audio_file_path)
-        
+
         # Pick 4 15-second segments from the audio for language detection
         # This is to avoid language detection error due to long non-vocal beginnings
         language = None
         languages = []
         logger.info("Detecting language using multiple audio segments for robustness")
         audio_duration = len(audio) / stable_whisper.whisper_compatibility.SAMPLE_RATE
-        segment_starts = [max(0, int(audio_duration * frac) - 5) for frac in [0.3, 0.5, 0.7, 0.9]]
+        segment_starts = [
+            max(0, int(audio_duration * frac) - 5) for frac in [0.3, 0.5, 0.7, 0.9]
+        ]
         for start in segment_starts:
             lang = detect_language(model, audio, start=start, duration=15)
             languages.append(lang)
-            logger.debug(f"Detected language '{lang}' from segment starting at {start}s")
+            logger.debug(
+                f"Detected language '{lang}' from segment starting at {start}s"
+            )
         # Choose the most frequently detected language
         if languages:
             logger.info(f"Languages detected from segments: {languages}")
@@ -121,20 +136,20 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             language = detected_language
         else:
             logger.warning("No language detected, proceeding without setting language")
-        
+
         # Transcribe the audio with word-level timestamps and stable-ts enhancements
         logger.info(f"Starting transcription of: {audio_file_path}")
         result = model.transcribe(
             audio,
             language=language,
             word_timestamps=True,  # Enable word-level timestamps
-            regroup=True,          # Auto-regroup for natural boundaries
-            vad=True,              # Use VAD for better silence detection
+            regroup=True,  # Auto-regroup for natural boundaries
+            vad=True,  # Use VAD for better silence detection
             denoiser="demucs",
             # only_voice_freq=True,
-            suppress_silence=True, # Suppress silence in timestamps
-            suppress_word_ts=True, # Adjust word timestamps based on silence
-            verbose=None,         # Control logging level,
+            suppress_silence=True,  # Suppress silence in timestamps
+            suppress_word_ts=True,  # Adjust word timestamps based on silence
+            verbose=None,  # Control logging level,
             condition_on_previous_text=False,
             hallucination_silence_threshold=2.0,
         )
@@ -146,7 +161,7 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
             seg = Segment(segment.start, segment.end, segment.text)
 
             # Add word-level information if available
-            if hasattr(segment, 'words') and segment.words:
+            if hasattr(segment, "words") and segment.words:
                 seg.words = []
                 for word in segment.words:
                     word_seg = Segment(word.start, word.end, word.word)
@@ -165,11 +180,14 @@ def transcribe_with_timestamps(audio_file_path, model_size="large-v3", device="c
         return segment_list
 
     except ImportError:
-        logger.exception("stable-ts is not installed. Please install it with: pip install stable-ts[mlx]")
+        logger.exception(
+            "stable-ts is not installed. Please install it with: pip install stable-ts[mlx]"
+        )
         return []
     except Exception as e:
         logger.exception(f"Error during transcription: {e}")
         return []
+
 
 def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
     """
@@ -190,7 +208,7 @@ def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
 
         # Initialize FFmpegNormalize with specified parameters
         normalizer = FFmpegNormalize(
-            output_format='wav',
+            output_format="wav",
             sample_rate=16000,
             progress=False,
             keep_lra_above_loudness_range_target=True,
@@ -207,18 +225,25 @@ def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
 
         # Check if normalized file was created successfully
         if normalized_path.exists():
-            logger.info(f"Audio normalization completed successfully: {normalized_path}")
+            logger.info(
+                f"Audio normalization completed successfully: {normalized_path}"
+            )
             return True
         else:
-            logger.error(f"Normalization failed - output file not found: {normalized_path}")
+            logger.error(
+                f"Normalization failed - output file not found: {normalized_path}"
+            )
             return False
 
     except ImportError:
-        logger.exception("ffmpeg-normalize is not installed. Please install it with: pip install ffmpeg-normalize")
+        logger.exception(
+            "ffmpeg-normalize is not installed. Please install it with: pip install ffmpeg-normalize"
+        )
         return False
     except Exception as e:
         logger.exception(f"Error during audio normalization: {e}")
         return False
+
 
 def process_single_file(input_file: Path, output_dir: Path, args) -> bool:
     """
@@ -237,24 +262,30 @@ def process_single_file(input_file: Path, output_dir: Path, args) -> bool:
     # Handle normalization if requested
     audio_file_to_transcribe = input_file
     if args.normalize:
-        output_path = output_dir / input_file.name.replace(input_file.suffix, "_normalized.wav")
+        output_path = output_dir / input_file.name.replace(
+            input_file.suffix, "_normalized.wav"
+        )
         if not normalize_audio(input_file, output_path):
             logger.error(f"Audio normalization failed for {input_file}")
             return False
 
         audio_file_to_transcribe = output_path
-        logger.info(f"Using normalized audio file for transcription: {audio_file_to_transcribe}")
+        logger.info(
+            f"Using normalized audio file for transcription: {audio_file_to_transcribe}"
+        )
 
     # Transcribe the vocals with timestamps
     segments = transcribe_with_timestamps(
         str(audio_file_to_transcribe),
         model_size=args.model,
         device=args.device,
-        use_mlx=args.use_mlx
+        use_mlx=args.use_mlx,
     )
 
     if segments:
-        logger.info(f"Transcription completed with {len(segments)} segments for {input_file}")
+        logger.info(
+            f"Transcription completed with {len(segments)} segments for {input_file}"
+        )
 
         # Save the transcription to files
         transcript_file = output_dir / f"{input_file.stem}_transcript.txt"
@@ -265,18 +296,23 @@ def process_single_file(input_file: Path, output_dir: Path, args) -> bool:
         if transcript_dir:
             os.makedirs(transcript_dir, exist_ok=True)
 
-        with open(transcript_file, 'w', encoding='utf-8') as f:
-            with open(transcript_word_file, 'w', encoding='utf-8') as word_f:
+        with open(transcript_file, "w", encoding="utf-8") as f:
+            with open(transcript_word_file, "w", encoding="utf-8") as word_f:
                 for segment in segments:
-                    if hasattr(segment, 'words') and segment.words:
+                    if hasattr(segment, "words") and segment.words:
                         for word in segment.words:
-                            word_f.write(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.text}\n")
-                    f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
+                            word_f.write(
+                                f"[{word.start:.2f}s -> {word.end:.2f}s] {word.text}\n"
+                            )
+                    f.write(
+                        f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n"
+                    )
         logger.info(f"Transcription saved to: {transcript_file}")
         return True
     else:
         logger.error(f"Transcription failed for {input_file}")
         return False
+
 
 def process_batch(input_dir: Path, output_dir: Path, args) -> int:
     """
@@ -304,7 +340,9 @@ def process_batch(input_dir: Path, output_dir: Path, args) -> int:
     failed = 0
 
     for audio_file in audio_files:
-        logger.info(f"Processing file {successful + failed + 1}/{len(audio_files)}: {audio_file.name}")
+        logger.info(
+            f"Processing file {successful + failed + 1}/{len(audio_files)}: {audio_file.name}"
+        )
 
         # Create subdirectory structure if needed
         relative_path = audio_file.relative_to(input_dir)
@@ -319,33 +357,53 @@ def process_batch(input_dir: Path, output_dir: Path, args) -> int:
     logger.info(f"Batch processing completed: {successful} successful, {failed} failed")
     return successful
 
+
 def main():
     # Load environment variables from .env file
     from dotenv import load_dotenv
+
     load_dotenv()
 
     # Set up argument parser
-    import argparse
-    parser = argparse.ArgumentParser(description='Transcribe vocals with timestamped transcription using stable-ts.')
-    parser.add_argument('input_path',
-                         help='Path to input audio file or directory containing audio files')
-    parser.add_argument('--output_dir', '-o',
-                         help='Output directory for transcript files (default: same as input)')
-    parser.add_argument('--normalize', action='store_true',
-                         help='Enable audio normalization to 48kHz WAV before transcription')
-    parser.add_argument('--recursive', '-r', action='store_true',
-                         help='Recursively search subdirectories for audio files (only used when input is a directory)')
-    parser.add_argument('--model', default="large-v3",
-                         help='Whisper model size to use for transcription (default: large-v3)')
-    parser.add_argument('--device', default="cpu",
-                         help='Device to run the transcription model on (default: cpu)')
-    parser.add_argument('--use-mlx', action='store_true',
-                         help='Use MLX models if available (auto-detected if not specified)')
-    parser.add_argument('--log-level', default='INFO',
-                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                         help='Logging level (default: INFO)')
-    parser.add_argument('--logfire', action='store_true',
-                         help='Enable Logfire integration')
+    parser = get_base_argparser(
+        description="Transcribe vocals with timestamped transcription using stable-ts."
+    )
+
+    parser.add_argument(
+        "input_path",
+        help="Path to input audio file or directory containing audio files",
+    )
+    parser.add_argument(
+        "--output_dir",
+        "-o",
+        help="Output directory for transcript files (default: same as input)",
+    )
+    parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="Enable audio normalization to 48kHz WAV before transcription",
+    )
+    parser.add_argument(
+        "--recursive",
+        "-r",
+        action="store_true",
+        help="Recursively search subdirectories for audio files (only used when input is a directory)",
+    )
+    parser.add_argument(
+        "--model",
+        default="large-v3",
+        help="Whisper model size to use for transcription (default: large-v3)",
+    )
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Device to run the transcription model on (default: cpu)",
+    )
+    parser.add_argument(
+        "--use-mlx",
+        action="store_true",
+        help="Use MLX models if available (auto-detected if not specified)",
+    )
 
     args = parser.parse_args()
 
@@ -382,6 +440,7 @@ def main():
         if successful_count == 0:
             logger.error("No files were successfully processed")
             exit(1)
+
 
 if __name__ == "__main__":
     main()

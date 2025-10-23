@@ -19,15 +19,25 @@ Pipeline Stage: 5/6 (LRC Generation)
 
 import os
 import logging
+from pathlib import Path
 from logging_config import setup_logging, get_logger
-from utils import load_prompt_template, read_file, convert_transcript_to_lrc, get_default_llm_config
-from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
+from utils import (
+    read_file,
+    get_base_argparser,
+    load_prompt_template,
+    convert_transcript_to_lrc,
+    get_default_llm_config,
+)
+from agent_utils import prepare_agent
 
 logger = get_logger(__name__)
 
-def generate_lrc_lyrics(lyrics_text, asr_transcript):
+
+def generate_lrc_lyrics(lyrics_text: str, 
+                        asr_transcript: str,
+                        paths: dict,
+                        force_recompute: bool = False,
+                        ) -> str | None:
     """
     Generate LRC format lyrics by combining downloaded lyrics and ASR transcript
     using an LLM.
@@ -40,177 +50,116 @@ def generate_lrc_lyrics(lyrics_text, asr_transcript):
     Returns:
         str: LRC formatted lyrics
     """
+    result_file_path = str(paths["lrc"])
+    
+    # Try to load existing result
+    if not force_recompute and os.path.exists(result_file_path):
+        try:
+            cached_result = read_file(result_file_path)
+            if cached_result.strip():
+                logger.info(f"Loaded cached LRC lyrics from: {result_file_path}")
+                return cached_result.strip()
+        except Exception as e:
+            logger.warning(f"Failed to read cached LRC lyrics: {e}")
+    
     # Convert ASR transcript to LRC format for better alignment
     lrc_transcript = convert_transcript_to_lrc(asr_transcript)
 
     # Load prompt template from file
-    prompt = load_prompt_template("lrc_generation_prompt.txt", lyrics_text=lyrics_text, lrc_transcript=lrc_transcript)
+    system_prompt = load_prompt_template("lrc_generation_prompt.txt")
 
-    if not prompt:
+    if not system_prompt:
         logger.exception("Failed to load prompt template")
         return None
 
+    user_prompt = f"Reference Lyrics:\n{lyrics_text}\n\nASR Transcript with word level timestamps:\n{lrc_transcript}"
+
     try:
         # Get configuration for pydantic_ai
         config = get_default_llm_config()
 
-        # Create OpenAI provider with custom configuration
-        openai_provider = OpenAIProvider(
-            base_url=config["OPENAI_BASE_URL"],
-            api_key=config["OPENAI_API_KEY"]
-        )
-
-        # Create OpenAI model with the provider
-        openai_model = OpenAIChatModel(
+        agent = prepare_agent(
+            config["OPENAI_BASE_URL"],
+            config["OPENAI_API_KEY"],
             config["OPENAI_MODEL"],
-            provider=openai_provider
-        )
-
-        # Create Pydantic AI agent for LRC generation
-        agent = Agent(
-            openai_model,
-            retries=3
+            instructions=system_prompt,
         )
 
         # Use the agent to generate LRC
-        result = agent.run_sync(prompt)
-
-        if result and result.output:
-            return result.output.strip()
-        else:
-            logger.exception("No result returned from LRC generation agent")
-            return None
-
+        result = agent.run_sync(user_prompt)
     except Exception as e:
         logger.exception(f"Error generating LRC lyrics: {e}")
         return None
-
-
-def correct_grammar_in_transcript(asr_transcript, filename=None):
-    """
-    Correct grammatical errors in ASR transcript using an LLM.
-
-    Args:
-        asr_transcript (str): Raw ASR transcript that may contain grammatical errors
-        filename (str, optional): Original audio filename for context
-        model (str): Model name to use for correction
-
-    Returns:
-        str: Grammatically corrected transcript
-    """
     
-    lrc_transcript = convert_transcript_to_lrc(asr_transcript)
-
-    # Load prompt template from file
-    prompt = load_prompt_template("grammatical_correction_prompt.txt", asr_transcript=lrc_transcript, filename=filename or "Unknown")
-
-    if not prompt:
-        logger.exception("Failed to load grammatical correction prompt template")
-        return lrc_transcript  # Return original if prompt loading fails
-
-    try:
-        # Get configuration for pydantic_ai
-        config = get_default_llm_config()
-
-        # Create OpenAI provider with custom configuration
-        openai_provider = OpenAIProvider(
-            base_url=config["OPENAI_BASE_URL"],
-            api_key=config["OPENAI_API_KEY"]
-        )
+    logger.info("LRC lyrics generated successfully!")
     
-        # Create OpenAI model with the provider
-        openai_model = OpenAIChatModel(
-            config["OPENAI_MODEL"],
-            provider=openai_provider,
-        )
+    if result and result.output:
+        try:
+            # Create directory if it doesn't exist
+            Path(result_file_path).parent.mkdir(parents=True, exist_ok=True)
 
-        # Create Pydantic AI agent for grammar correction
-        agent = Agent(
-            openai_model,
-            retries=3
-        )
+            # Save the LRC lyrics to a file
+            with open(result_file_path, "w", encoding="utf-8") as f:
+                f.write(result.output.strip())
 
-        # Use the agent to correct grammar
-        result = agent.run_sync(prompt)
+            logger.info(f"LRC lyrics saved to: {result_file_path}")
+        except Exception as e:
+            logger.exception("Failed to save LRC lyrics to file")
+            return 
+    else:
+        logger.exception("No result returned from LRC generation agent")
+        return
 
-        if result and result.output:
-            corrected_transcript = result.output.strip()
-            logger.info("Grammatical correction completed successfully")
-            return corrected_transcript
-        else:
-            logger.exception("No result returned from grammar correction agent")
-            return asr_transcript
-
-    except Exception as e:
-        logger.exception(f"Error correcting grammar in transcript: {e}")
-        return asr_transcript  # Return original if correction fails
 
 def main():
     # Load environment variables from .env file
     from dotenv import load_dotenv
+
     load_dotenv()
 
     # Set up argument parser
-    import argparse
-    parser = argparse.ArgumentParser(description='Generate LRC format lyrics by combining downloaded lyrics and ASR output using an OpenAI-compatible API via Pydantic AI.')
-    parser.add_argument('--lyrics-file', '-l',
-                        help='Path to the lyrics file')
-    parser.add_argument('--transcript-file', '-t',
-                        help='Path to the transcript file')
-    parser.add_argument('--output', '-o',
-                        help='Output LRC file path')
-    parser.add_argument('--log-level', default='INFO',
-                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                         help='Logging level (default: INFO)')
-    parser.add_argument('--logfire', action='store_true',
-                         help='Enable Logfire integration')
-    
+    parser = get_base_argparser(
+        description="Generate LRC format lyrics by combining downloaded lyrics and ASR output using AI"
+    )
+
+    parser.add_argument("--lyrics-file", "-l", help="Path to the lyrics file")
+    parser.add_argument("--transcript-file", "-t", help="Path to the transcript file")
+    parser.add_argument("--output", "-o", help="Output LRC file path")
+
     args = parser.parse_args()
-    
+
     # Set up logging with specified level
     log_level = getattr(logging, args.log_level.upper())
     setup_logging(level=log_level, enable_logfire=args.logfire)
-    
+
     # Define file paths
     lyrics_file_path = args.lyrics_file
     transcript_file_path = args.transcript_file
     output_lrc_path = args.output
-    
+
     # Check if the input files exist
     if not os.path.exists(lyrics_file_path):
         logger.exception(f"Lyrics file does not exist: {lyrics_file_path}")
         return
-    
+
     if not os.path.exists(transcript_file_path):
         logger.exception(f"Transcript file does not exist: {transcript_file_path}")
         return
-    
+
     logger.info("Reading lyrics and transcript files...")
-    
+
     # Read the lyrics and transcript
     lyrics_text = read_file(lyrics_file_path)
     asr_transcript = read_file(transcript_file_path)
     
+    paths = {
+        "lrc": output_lrc_path,
+    }
+
     logger.info("Generating LRC formatted lyrics...")
-    
+
     # Generate the LRC lyrics
-    lrc_lyrics = generate_lrc_lyrics(lyrics_text, asr_transcript)
-    
-    if lrc_lyrics:
-        logger.info("LRC lyrics generated successfully!")
-        
-        # Create directory if it doesn't exist
-        output_dir = os.path.dirname(output_lrc_path)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-        
-        # Save the LRC lyrics to a file
-        with open(output_lrc_path, 'w', encoding='utf-8') as f:
-            f.write(lrc_lyrics)
-        
-        logger.info(f"LRC lyrics saved to: {output_lrc_path}")
-    else:
-        logger.exception("Failed to generate LRC lyrics.")
+    generate_lrc_lyrics(lyrics_text, asr_transcript, paths)
 
 
 if __name__ == "__main__":

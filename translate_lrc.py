@@ -22,15 +22,18 @@ Pipeline Stage: 6/6 (Translation)
 """
 
 import os
-import argparse
 import logging
 
 from logging_config import setup_logging, get_logger
-from utils import load_prompt_template, read_file, validate_lrc_content, get_prompt_file_for_language, get_translation_config
-from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.settings import ModelSettings
+from utils import (
+    read_file,
+    get_base_argparser,
+    load_prompt_template,
+    validate_lrc_content,
+    get_prompt_file_for_language,
+    get_translation_config,
+)
+from agent_utils import prepare_agent
 
 logger = get_logger(__name__)
 
@@ -49,42 +52,35 @@ def translate_lrc_content(lrc_content, target_language="Traditional Chinese"):
     """
 
     # Get the appropriate prompt file for the target language
-    prompt_file_name = get_prompt_file_for_language(target_language)
+    prompt_file_name = get_prompt_file_for_language(target_language, task="translation")
     if not prompt_file_name:
         logger.exception(f"No prompt file configured for language: {target_language}")
         return None
 
     # Load prompt template from file
-    prompt = load_prompt_template(prompt_file_name, target_language=target_language, lrc_content=lrc_content)
+    system_prompt = load_prompt_template(
+        prompt_file_name, target_language=target_language
+    )
 
-    if not prompt:
-        logger.exception(f"Failed to load prompt template: {prompt_file_name}")
+    if not system_prompt:
+        logger.exception(f"Failed to load system prompt: {prompt_file_name}")
         return None
+
+    user_prompt = lrc_content
 
     try:
         # Get configuration for pydantic_ai
         config = get_translation_config()
 
-        # Create OpenAI provider with custom configuration
-        openai_provider = OpenAIProvider(
-            base_url=config["base_url"],
-            api_key=config["api_key"]
-        )
-
-        # Create OpenAI model with the provider
-        openai_model = OpenAIChatModel(
+        agent = prepare_agent(
+            config["base_url"],
+            config["api_key"],
             config["model"],
-            provider=openai_provider
-        )
-
-        # Create Pydantic AI agent for translation
-        agent = Agent(
-            openai_model,
-            retries=3
+            instructions=system_prompt,
         )
 
         # Use the agent to perform translation
-        result = agent.run_sync(prompt)
+        result = agent.run_sync(user_prompt)
 
         if result and result.output:
             return result.output.strip()
@@ -97,53 +93,59 @@ def translate_lrc_content(lrc_content, target_language="Traditional Chinese"):
         return None
 
 
-def main(input_path, output_path, target_language, log_level=logging.INFO, logfire_enabled=True):
-    # Set up logging with specified level
-    setup_logging(level=log_level, enable_logfire=logfire_enabled)
+def main(input_path, output_path, target_language):
 
     # Get translation configuration using utility function
     config = get_translation_config()
 
     logger.debug(f"Using base_url: {config['base_url']}")
     logger.debug(f"Using model: {config['model']}")
-    
+
     # Check if the input file exists
     if not os.path.exists(input_path):
         logger.exception(f"Input LRC file does not exist: {input_path}")
         return False
-    
+
     logger.info("Reading LRC file...")
-    
+
     # Read the complete LRC file content
     lrc_content = read_file(input_path)
     logger.debug(f"Original LRC content length: {len(lrc_content)} characters")
-    logger.debug(f"Original LRC content sample: {lrc_content[:300]}...")  # First 300 chars
-    
+    logger.debug(
+        f"Original LRC content sample: {lrc_content[:300]}..."
+    )  # First 300 chars
+
     logger.info("Translating LRC content to bilingual format...")
-    
+
     # Translate the entire LRC content
     translated_lrc_content = translate_lrc_content(lrc_content, target_language)
-    
+
     if translated_lrc_content:
         logger.info("LRC content translated successfully!")
-        logger.debug(f"Translated LRC content length: {len(translated_lrc_content)} characters")
-        logger.debug(f"Translated LRC content sample: {translated_lrc_content[:300]}...")  # First 30 chars
-        
+        logger.debug(
+            f"Translated LRC content length: {len(translated_lrc_content)} characters"
+        )
+        logger.debug(
+            f"Translated LRC content sample: {translated_lrc_content[:300]}..."
+        )  # First 30 chars
+
         # Validate the translated content
         if validate_lrc_content(translated_lrc_content):
             logger.info("Translated LRC content validation passed")
         else:
-            logger.warning("Translated LRC content validation failed, but saving anyway")
-        
+            logger.warning(
+                "Translated LRC content validation failed, but saving anyway"
+            )
+
         # Create directory if it doesn't exist
         output_dir = os.path.dirname(output_path)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
-        
+
         # Save the translated LRC to a file
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(translated_lrc_content)
-        
+
         logger.info(f"Bilingual LRC lyrics saved to: {output_path}")
         return True
     else:
@@ -152,18 +154,27 @@ def main(input_path, output_path, target_language, log_level=logging.INFO, logfi
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Translate LRC lyrics to another language')
-    parser.add_argument('input', nargs='?', help='Input LRC file path')
-    parser.add_argument('-o', '--output', help='Output LRC file path')
-    parser.add_argument('-l', '--language', default='Traditional Chinese', help='Target language for translation')
-    parser.add_argument('--logfire', action='store_true',
-                         help='Enable Logfire integration')
-    
+    parser = get_base_argparser(description="Translate LRC lyrics to another language")
+    parser.add_argument("input", nargs="?", help="Input LRC file path")
+    parser.add_argument("-o", "--output", help="Output LRC file path")
+    parser.add_argument(
+        "-l",
+        "--language",
+        default="Traditional Chinese",
+        help="Target language for translation",
+    )
+
     args = parser.parse_args()
+
+    # Set up logging with Logfire integration
+    log_level = getattr(logging, args.log_level.upper())
+    setup_logging(level=log_level, enable_logfire=args.logfire)
 
     # Use default paths if not provided
     input_path = args.input
-    output_path = args.output or input_path.replace('.lrc', f'_{args.language.replace(" ", "_")}.lrc')
+    output_path = args.output or input_path.replace(
+        ".lrc", f'_{args.language.replace(" ", "_")}.lrc'
+    )
 
     success = main(input_path, output_path, args.language, logfire_enabled=args.logfire)
     if not success:

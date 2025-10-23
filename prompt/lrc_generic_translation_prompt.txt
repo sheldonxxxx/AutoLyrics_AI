@@ -40,10 +40,3 @@ Your task is to translate LRC format lyrics (with timestamps) into {target_langu
 
 [00:18.90]Original lyrics line 3
 [00:18.90]Translated lyrics line 3 in {target_language}
-
----
-
-Now please translate the following LRC lyrics content and produce a complete bilingual LRC file:
-{lrc_content}
-
-{target_language} bilingual LRC lyrics:

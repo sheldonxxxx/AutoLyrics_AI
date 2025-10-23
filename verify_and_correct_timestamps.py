@@ -20,12 +20,16 @@ Pipeline Stage: 5.5/6 (Timestamp Verification and Correction)
 import os
 import logging
 from logging_config import setup_logging, get_logger
-from utils import load_prompt_template, get_default_llm_config, convert_transcript_to_lrc
-from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
+from utils import (
+    load_prompt_template,
+    get_default_llm_config,
+    convert_transcript_to_lrc,
+    get_base_argparser,
+)
+from agent_utils import prepare_agent
 
 logger = get_logger(__name__)
+
 
 def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str | None:
     """
@@ -43,43 +47,35 @@ def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str 
     """
     # Load prompt template from file
     asr_transcript = convert_transcript_to_lrc(asr_transcript)
-    
-    # Format the prompt with actual data
-    prompt = load_prompt_template("lrc_timestamp_verification_prompt.txt", lrc_content=lrc_content, asr_transcript=asr_transcript)
 
-    if not prompt:
+    # Format the prompt with actual data
+    system_prompt = load_prompt_template("lrc_timestamp_verification_prompt.txt")
+
+    if not system_prompt:
         logger.exception("Failed to load timestamp verification prompt template")
         return None
 
+    user_prompt = f"ASR Transcript:\n{asr_transcript}\n\nLRC Content:\n{lrc_content}"
     try:
         # Get configuration for pydantic_ai
         config = get_default_llm_config()
 
-        # Create OpenAI provider with custom configuration
-        openai_provider = OpenAIProvider(
+        agent = prepare_agent(
             base_url=config["OPENAI_BASE_URL"],
-            api_key=config["OPENAI_API_KEY"]
-        )
-
-        # Create OpenAI model with the provider
-        openai_model = OpenAIChatModel(
-            config["OPENAI_MODEL"],
-            provider=openai_provider
-        )
-
-        # Create Pydantic AI agent for timestamp verification and correction
-        agent = Agent(
-            openai_model,
-            retries=3
+            api_key=config["OPENAI_API_KEY"],
+            model=config["OPENAI_MODEL"],
+            instructions=system_prompt,
         )
 
         # Use the agent to verify and correct timestamps
-        result = agent.run_sync(prompt)
+        result = agent.run_sync(user_prompt)
 
         if result and result.output:
             corrected_lrc = result.output.strip()
             logger.info("Timestamp verification and correction completed successfully")
-            logger.debug(f"Corrected LRC content length: {len(corrected_lrc)} characters")
+            logger.debug(
+                f"Corrected LRC content length: {len(corrected_lrc)} characters"
+            )
             return corrected_lrc
         else:
             logger.exception("No result returned from timestamp verification agent")
@@ -89,25 +85,25 @@ def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str 
         logger.exception(f"Error during timestamp verification and correction: {e}")
         return None
 
+
 def main():
     """Main function for command-line usage of timestamp verification."""
     # Load environment variables from .env file
     from dotenv import load_dotenv
+
     load_dotenv()
 
-    import argparse
-    parser = argparse.ArgumentParser(description='Verify and correct LRC file timestamps using ASR transcript as reference via Pydantic AI.')
-    parser.add_argument('--lrc-file', '-l',
-                        help='Path to the LRC file to verify and correct')
-    parser.add_argument('--transcript-file', '-t',
-                        help='Path to the ASR transcript file')
-    parser.add_argument('--output', '-o',
-                        help='Output corrected LRC file path')
-    parser.add_argument('--log-level', default='INFO',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                        help='Logging level (default: INFO)')
-    parser.add_argument('--logfire', action='store_true',
-                        help='Enable Logfire integration')
+    parser = get_base_argparser(
+        description="Verify and correct LRC file timestamps using ASR transcript as reference"
+    )
+
+    parser.add_argument(
+        "--lrc-file", "-l", help="Path to the LRC file to verify and correct"
+    )
+    parser.add_argument(
+        "--transcript-file", "-t", help="Path to the ASR transcript file"
+    )
+    parser.add_argument("--output", "-o", help="Output corrected LRC file path")
 
     args = parser.parse_args()
 
@@ -133,10 +129,10 @@ def main():
 
     # Read the LRC and transcript content
     try:
-        with open(lrc_file_path, 'r', encoding='utf-8') as f:
+        with open(lrc_file_path, "r", encoding="utf-8") as f:
             lrc_content = f.read()
 
-        with open(transcript_file_path, 'r', encoding='utf-8') as f:
+        with open(transcript_file_path, "r", encoding="utf-8") as f:
             asr_transcript = f.read()
 
     except Exception as e:
@@ -158,7 +154,7 @@ def main():
 
         # Save the corrected LRC content to a file
         try:
-            with open(output_lrc_path, 'w', encoding='utf-8') as f:
+            with open(output_lrc_path, "w", encoding="utf-8") as f:
                 f.write(corrected_lrc)
 
             logger.info(f"Corrected LRC file saved to: {output_lrc_path}")

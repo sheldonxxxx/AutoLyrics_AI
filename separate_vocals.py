@@ -27,41 +27,46 @@ from logging_config import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
-def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str ="vocals_mel_band_roformer.ckpt"):
+
+def separate_vocals(
+    input_file_path: str,
+    vocals_output_path: Path,
+    model: str = "vocals_mel_band_roformer.ckpt",
+):
     """
     Separate vocals from an audio file using audio-separator.
 
     Args:
         input_file_path (str): Path to the input audio file
-        vocals_output_path (str): Specific path for the vocals output file 
+        vocals_output_path (str): Specific path for the vocals output file
         model (str): Model to use for separation (default: "UVR_MDXNET_Main.onnx")
 
     Returns:
         str: Path to the vocals file if successful, None otherwise
     """
-    
+
     # Set up output directory
     vocals_output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Create the model directory if it doesn't exist
     model_dir = os.path.join(os.getcwd(), "models")
     os.makedirs(model_dir, exist_ok=True)
-    
+
     # Initialize the separator with CPU (since we're using the CPU version)
-    separator = Separator(log_level=logging.WARNING,
-                          model_file_dir=model_dir,
-                          output_dir=vocals_output_path.parent,
-                          output_single_stem="Vocals",
-                          sample_rate=16000)  # Only output the vocals stem
-    
+    separator = Separator(
+        log_level=logging.WARNING,
+        model_file_dir=model_dir,
+        output_dir=vocals_output_path.parent,
+        output_single_stem="Vocals",
+        sample_rate=16000,
+    )  # Only output the vocals stem
+
     # Load the model
     output_files = separator.load_model(model_filename=model)
-    
+
     # Load and separate the audio
     logger.info(f"Loading audio file: {input_file_path}")
-    output_names = {
-        "Vocals": vocals_output_path.stem
-    }
+    output_names = {"Vocals": vocals_output_path.stem}
     separator.separate(input_file_path, output_names)
 
     if vocals_output_path.exists():
@@ -72,25 +77,41 @@ def separate_vocals(input_file_path: str, vocals_output_path: Path, model: str =
         logger.info(f"Available output files: {output_files}")
         return None
 
+
 def main():
     # Load environment variables from .env file
     from dotenv import load_dotenv
+
     load_dotenv()
 
     # Set up argument parser
     import argparse
-    parser = argparse.ArgumentParser(description='Extract vocals from audio files using audio-separator (UVR).')
-    parser.add_argument('file_path', nargs='?',
-                        help='Path to the input audio file')
-    parser.add_argument('--output-dir', '-o', default="output",
-                        help='Directory to save the separated audio files (default: output)')
-    parser.add_argument('--model', '-m', default="UVR_MDXNET_Main.onnx",
-                        help='Model to use for separation (default: UVR_MDXNET_Main.onnx)')
-    parser.add_argument('--log-level', default='INFO',
-                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                         help='Logging level (default: INFO)')
-    parser.add_argument('--logfire', action='store_true',
-                         help='Enable Logfire integration')
+
+    parser = argparse.ArgumentParser(
+        description="Extract vocals from audio files using audio-separator (UVR)."
+    )
+    parser.add_argument("file_path", nargs="?", help="Path to the input audio file")
+    parser.add_argument(
+        "--output-dir",
+        "-o",
+        default="output",
+        help="Directory to save the separated audio files (default: output)",
+    )
+    parser.add_argument(
+        "--model",
+        "-m",
+        default="UVR_MDXNET_Main.onnx",
+        help="Model to use for separation (default: UVR_MDXNET_Main.onnx)",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level (default: INFO)",
+    )
+    parser.add_argument(
+        "--logfire", action="store_true", help="Enable Logfire integration"
+    )
 
     args = parser.parse_args()
 
@@ -116,6 +137,7 @@ def main():
         logger.info(f"Successfully extracted vocals to: {vocals_file}")
     else:
         logger.exception("Failed to extract vocals")
+
 
 if __name__ == "__main__":
     main()

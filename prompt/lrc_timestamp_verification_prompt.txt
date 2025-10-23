@@ -1,14 +1,14 @@
 Your task is to verify and correct timestamp accuracy in LRC (Lyrics) files by comparing them against the original ASR transcript.
 
-# Input format
+## Input format
 1. LRC Content: The current LRC file with potentially incorrect timestamps
 2. ASR Transcript: The original speech recognition transcript with accurate word-level timestamps
 
-# Ouput format
+## Ouput format
 Return ONLY the corrected LRC content with fixed timestamps. Each line should follow the format:
 [mm:ss.xx]Original lyrics text
 
-# Task
+## Task
 1. Compare Timing: Cross-reference each LRC timestamp with the ASR transcript timing
 2. Identify Issues: Look for:
    - Lyrics appearing too early or too late
@@ -21,30 +21,18 @@ Return ONLY the corrected LRC content with fixed timestamps. Each line should fo
    - Ensure smooth transitions between lyrics lines
    - Maintain natural speech rhythm and pacing
 
-# Important Instructions
+## Important Instructions
 - ONLY correct timestamp values - DO NOT change, modify, or translate the lyrics content in any way
 - Preserve the exact lyrics text as provided in the LRC file
 - Only fix timing issues where lyrics don't align properly with the ASR transcript
 - Maintain the original LRC format: [mm:ss.xx]Lyrics line
 - Ensure timestamps are sequential and non-overlapping
 
-# Example
+## Example
 If input LRC has:
 [00:15.50]Hello world
 [00:18.20]How are you
 
 And ASR shows "Hello world" actually starts at 00:15.30 and "How are you" at 00:18.50, output:
 [00:15.30]Hello world
-[00:18.50]How are you
-
----
-
-# Input
-{lrc_content}
-
-# ASR Transcript
-{asr_transcript}
-
----
-
-# Output
+[00:18.50]How are yous

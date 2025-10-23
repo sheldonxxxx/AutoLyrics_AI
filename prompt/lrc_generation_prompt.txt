@@ -12,6 +12,8 @@ Your task is to create properly timed LRC format lyrics by combining a reference
 - Ensure timestamps are in [mm:ss.xx] format
 - Output only the LRC formatted lyrics with timestamps, nothing else
 
+---
+
 ## Example
 
 Input ASR:
@@ -28,17 +30,3 @@ Input Reference Lyrics:
 
 Expected Output:
 [00:00.68]今静かな夜の中で
-
-## Input Data:
-
-1. Reference Lyrics:
-```
-{lyrics_text}
-```
-
-2. ASR Transcript with word level timestamps:
-```
-{lrc_transcript}
-```
-
-## Output:
