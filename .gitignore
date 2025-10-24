@@ -19,3 +19,4 @@ models/
 *.xlsx
 
 .DS_Store
+.vscode/settings.json

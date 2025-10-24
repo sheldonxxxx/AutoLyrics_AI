@@ -29,10 +29,9 @@ from ffmpeg_normalize import FFmpegNormalize
 import stable_whisper
 from stable_whisper.audio import load_audio
 from typing import List
-from utils import find_audio_files, get_base_argparser
+from utils import find_audio_files, get_base_argparser, get_output_paths
 
 logger = get_logger(__name__)
-
 
 class Segment:
     def __init__(self, start, end, text):
@@ -65,28 +64,104 @@ def detect_language(model, audio, start=30, duration=30):
     Returns:
         str: Detected language code
     """
-    start = start * stable_whisper.whisper_compatibility.SAMPLE_RATE
-    end = start + duration * stable_whisper.whisper_compatibility.SAMPLE_RATE
+    start_samples = start * stable_whisper.whisper_compatibility.SAMPLE_RATE
+    end_samples = start_samples + duration * stable_whisper.whisper_compatibility.SAMPLE_RATE
+
+    # Ensure start and end are within audio bounds
+    audio_length = len(audio)
+    start_samples = max(0, min(start_samples, audio_length - 1))
+    end_samples = max(start_samples + 1, min(end_samples, audio_length))
+
+    if end_samples <= start_samples:
+        logger.warning(f"Invalid segment: start={start_samples}, end={end_samples}")
+        return "en"  # Default fallback
+
     return model.transcribe(
-        audio[start:end], language=None, verbose=None, only_voice_freq=True
+        audio[start_samples:end_samples], language=None, verbose=None, only_voice_freq=True
     ).language
 
 
+def _load_transcription_model(model_size, device, use_mlx):
+    """Load the appropriate Whisper model based on device and MLX preference."""
+    if use_mlx and device == "cpu":
+        logger.info(f"Loading MLX Whisper model: {model_size}")
+        return stable_whisper.load_mlx_whisper(model_size)
+    else:
+        logger.info(f"Loading standard Whisper model: {model_size} on {device}")
+        return stable_whisper.load_model(model_size, device=device)
+
+
+def _detect_language_from_segments(model, audio):
+    """Detect language using multiple audio segments for robustness."""
+    languages = []
+    audio_duration = len(audio) / stable_whisper.whisper_compatibility.SAMPLE_RATE
+    if audio_duration <= 0:
+        logger.warning("Audio duration is zero or negative, skipping language detection")
+        return None
+
+    segment_starts = [
+        max(0, int(audio_duration * frac) - 5) for frac in [0.3, 0.5, 0.7, 0.9]
+    ]
+    for start in segment_starts:
+        lang = detect_language(model, audio, start=start, duration=15)
+        languages.append(lang)
+        logger.debug(f"Detected language '{lang}' from segment starting at {start}s")
+
+    if languages:
+        detected_language = max(set(languages), key=languages.count)
+        logger.info(f"Final detected language: {detected_language}")
+        return detected_language
+    else:
+        logger.warning("No language detected")
+        return None
+
+
+def _process_transcription_result(result):
+    """Process the transcription result into segment list with words."""
+    segment_list = []
+    for segment in result.segments:
+        seg = Segment(segment.start, segment.end, segment.text)
+
+        if hasattr(segment, "words") and segment.words:
+            seg.words = [Segment(word.start, word.end, word.word) for word in segment.words]
+        else:
+            seg.words = [seg]  # Fallback
+
+        segment_list.append(seg)
+    return segment_list
+
+
+def _save_transcription(segment_list, transcript_file, transcript_word_file):
+    """Save transcription to text files."""
+    with open(transcript_file, "w", encoding="utf-8") as f:
+        with open(transcript_word_file, "w", encoding="utf-8") as word_f:
+            for segment in segment_list:
+                if hasattr(segment, "words") and segment.words:
+                    for word in segment.words:
+                        word_f.write(f"[{word.start:.2f}s -> {word.end:.2f}s] {word.text}\n")
+                f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
+    logger.info(f"Transcription saved to: {transcript_file}")
+
+
 def transcribe_with_timestamps(
-    audio_file_path, model_size="large-v3", device="cpu", use_mlx=None
-):
+    audio_file_path: Path,
+    paths: dict,
+    model_size="large-v3",
+    device="cpu",
+    use_mlx=None,
+) -> bool:
     """
     Transcribe an audio file with timestamped transcription using stable-ts.
 
     Args:
-        audio_file_path (str): Path to the audio file to transcribe
+        audio_file_path (Path): Path to the audio file to transcribe
         model_size (str): Size of the Whisper model to use (default: "large-v3")
         device (str): Device to run the model on (default: "cpu")
         use_mlx (bool or None): Whether to use MLX models for Apple Silicon.
                                 If None, auto-detect based on MLX availability (default: None)
 
     Returns:
-        list: List of segments with timestamps and text
+        bool: True if transcription was successful, False otherwise
     """
     try:
         # Set HF_HOME for model downloads
@@ -101,92 +176,50 @@ def transcribe_with_timestamps(
             logger.error(
                 "Please install stable-ts with MLX support using: uv add stable-ts[mlx]"
             )
-            return []
+            return False
 
-        # Load the model based on device and MLX preference
-        if use_mlx and device == "cpu":
-            logger.info(f"Loading MLX Whisper model: {model_size}")
-            model = stable_whisper.load_mlx_whisper(model_size)
-        else:
-            logger.info(f"Loading standard Whisper model: {model_size} on {device}")
-            model = stable_whisper.load_model(model_size, device=device)
+        # Load the model
+        model = _load_transcription_model(model_size, device, use_mlx)
 
-        audio = load_audio(audio_file_path)
+        audio = load_audio(str(audio_file_path))
 
-        # Pick 4 15-second segments from the audio for language detection
-        # This is to avoid language detection error due to long non-vocal beginnings
-        language = None
-        languages = []
-        logger.info("Detecting language using multiple audio segments for robustness")
-        audio_duration = len(audio) / stable_whisper.whisper_compatibility.SAMPLE_RATE
-        segment_starts = [
-            max(0, int(audio_duration * frac) - 5) for frac in [0.3, 0.5, 0.7, 0.9]
-        ]
-        for start in segment_starts:
-            lang = detect_language(model, audio, start=start, duration=15)
-            languages.append(lang)
-            logger.debug(
-                f"Detected language '{lang}' from segment starting at {start}s"
-            )
-        # Choose the most frequently detected language
-        if languages:
-            logger.info(f"Languages detected from segments: {languages}")
-            detected_language = max(set(languages), key=languages.count)
-            logger.info(f"Final detected language: {detected_language}")
-            language = detected_language
-        else:
-            logger.warning("No language detected, proceeding without setting language")
+        # Detect language
+        language = _detect_language_from_segments(model, audio)
 
-        # Transcribe the audio with word-level timestamps and stable-ts enhancements
+        # Transcribe the audio
         logger.info(f"Starting transcription of: {audio_file_path}")
         result = model.transcribe(
             audio,
             language=language,
-            word_timestamps=True,  # Enable word-level timestamps
-            regroup=True,  # Auto-regroup for natural boundaries
-            vad=True,  # Use VAD for better silence detection
+            word_timestamps=True,
+            regroup=True,
+            vad=True,
             denoiser="demucs",
-            # only_voice_freq=True,
-            suppress_silence=True,  # Suppress silence in timestamps
-            suppress_word_ts=True,  # Adjust word timestamps based on silence
-            verbose=None,  # Control logging level,
+            suppress_silence=True,
+            suppress_word_ts=True,
+            verbose=None,
             condition_on_previous_text=False,
             hallucination_silence_threshold=2.0,
         )
 
-        # Convert stable-ts result to match the expected format
-        segment_list = []
-        for segment in result.segments:
-            # Create segment object
-            seg = Segment(segment.start, segment.end, segment.text)
+        # Process the result
+        segment_list = _process_transcription_result(result)
 
-            # Add word-level information if available
-            if hasattr(segment, "words") and segment.words:
-                seg.words = []
-                for word in segment.words:
-                    word_seg = Segment(word.start, word.end, word.word)
-                    seg.words.append(word_seg)
-            else:
-                # Fallback: create single word segment
-                seg.words = [seg]
-
-            segment_list.append(seg)
-
-        # Print the transcribed segments with timestamps
+        # Log segments
         for segment in segment_list:
             logger.debug(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
 
         logger.info(f"Transcription completed with {len(segment_list)} segments")
-        return segment_list
 
-    except ImportError:
-        logger.exception(
-            "stable-ts is not installed. Please install it with: pip install stable-ts[mlx]"
-        )
-        return []
-    except Exception as e:
-        logger.exception(f"Error during transcription: {e}")
-        return []
+        # Save the transcription
+        transcript_file = paths["transcript_txt"]
+        transcript_word_file = paths["transcript_word_txt"]
+        _save_transcription(segment_list, transcript_file, transcript_word_file)
+
+        return True
+    except Exception:
+        logger.exception("Error during transcription")
+        return False
 
 
 def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
@@ -209,7 +242,7 @@ def normalize_audio(audio_path: Path, normalized_path: Path) -> bool:
         # Initialize FFmpegNormalize with specified parameters
         normalizer = FFmpegNormalize(
             output_format="wav",
-            sample_rate=16000,
+            sample_rate=48000,
             progress=False,
             keep_lra_above_loudness_range_target=True,
             target_level=-16.0,
@@ -274,45 +307,23 @@ def process_single_file(input_file: Path, output_dir: Path, args) -> bool:
             f"Using normalized audio file for transcription: {audio_file_to_transcribe}"
         )
 
-    # Transcribe the vocals with timestamps
-    segments = transcribe_with_timestamps(
-        str(audio_file_to_transcribe),
-        model_size=args.model,
-        device=args.device,
-        use_mlx=args.use_mlx,
-    )
+    paths = get_output_paths(input_file, output_dir)
 
-    if segments:
-        logger.info(
-            f"Transcription completed with {len(segments)} segments for {input_file}"
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Transcribe the vocals with timestamps
+        transcribe_with_timestamps(
+            audio_file_to_transcribe,
+            paths,
+            model_size=args.model,
+            device=args.device,
+            use_mlx=args.use_mlx,
         )
-
-        # Save the transcription to files
-        transcript_file = output_dir / f"{input_file.stem}_transcript.txt"
-        transcript_word_file = output_dir / f"{input_file.stem}_transcript_word.txt"
-
-        # Create directory if it doesn't exist
-        transcript_dir = os.path.dirname(transcript_file)
-        if transcript_dir:
-            os.makedirs(transcript_dir, exist_ok=True)
-
-        with open(transcript_file, "w", encoding="utf-8") as f:
-            with open(transcript_word_file, "w", encoding="utf-8") as word_f:
-                for segment in segments:
-                    if hasattr(segment, "words") and segment.words:
-                        for word in segment.words:
-                            word_f.write(
-                                f"[{word.start:.2f}s -> {word.end:.2f}s] {word.text}\n"
-                            )
-                    f.write(
-                        f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n"
-                    )
-        logger.info(f"Transcription saved to: {transcript_file}")
         return True
-    else:
-        logger.error(f"Transcription failed for {input_file}")
+    except Exception:
+        logger.exception(f"Error processing file {input_file}")
         return False
-
 
 def process_batch(input_dir: Path, output_dir: Path, args) -> int:
     """

@@ -27,10 +27,112 @@ import argparse
 from pathlib import Path
 from typing import List, Dict, Optional
 from types import SimpleNamespace
+from datetime import datetime
+import time
+from pydantic import BaseModel, Field
 
 from logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+class ProcessingResults(BaseModel):
+    """Manages processing results and metadata for a single file."""
+
+    # File information
+    filename: str = Field(description="Name of the input file")
+    file_path: str = Field(description="Full path to the input file")
+    target_language: str = Field(default="", description="Target language")
+    song_language: str = Field(
+        default="", description="Language of the song (e.g., Japanese)"
+    )
+    processing_start_time: str = Field(
+        default_factory=lambda: datetime.now().isoformat(),
+        description="ISO timestamp when processing started",
+    )
+    start_time: float = Field(
+        description="Start time in seconds for duration calculation"
+    )
+
+    # Step results
+    metadata_success: bool = Field(
+        default=False, description="Whether metadata extraction succeeded"
+    )
+    metadata_title: str = Field(default="", description="Song title from metadata")
+    metadata_artist: str = Field(default="", description="Artist name from metadata")
+    metadata_album: str = Field(default="", description="Album name from metadata")
+    metadata_genre: str = Field(default="", description="Genre from metadata")
+    metadata_year: str = Field(default="", description="Year from metadata")
+    metadata_track_number: str = Field(
+        default="", description="Track number from metadata"
+    )
+
+    vocals_separation_success: bool = Field(
+        default=False, description="Whether vocal separation succeeded"
+    )
+
+    transcription_success: bool = Field(
+        default=False, description="Whether transcription succeeded"
+    )
+
+    lyrics_search_success: bool = Field(
+        default=False, description="Whether lyrics search succeeded"
+    )
+
+    # Story search results
+    story_search_success: bool = Field(
+        default=False, description="Whether story search succeeded"
+    )
+
+    lrc_generation_success: bool = Field(
+        default=False, description="Whether LRC generation succeeded"
+    )
+
+    timestamp_verification_success: bool = Field(
+        default=False, description="Whether timestamp verification succeeded"
+    )
+
+    translation_success: bool = Field(
+        default=False, description="Whether translation succeeded"
+    )
+
+    explanation_success: bool = Field(
+        default=False, description="Whether explanation succeeded"
+    )
+    
+    song_story_search_success: bool = Field(
+        default=False, description="Whether song story search succeeded"
+    )
+
+    # Overall results
+    overall_success: bool = Field(
+        default=False, description="Overall processing success"
+    )
+    processing_end_time: str = Field(
+        default="", description="ISO timestamp when processing ended"
+    )
+    processing_duration_seconds: float = Field(
+        default=0.0, description="Total processing duration in seconds"
+    )
+    error_message: str = Field(
+        default="", description="Error message if processing failed"
+    )
+
+    @classmethod
+    def create(cls, input_file: Path, start_time: float) -> "ProcessingResults":
+        """Create a new ProcessingResults instance with initial values."""
+        return cls(
+            filename=input_file.name,
+            file_path=str(input_file),
+            processing_start_time=datetime.now().isoformat(),
+            start_time=start_time,
+        )
+
+    def finalize(self):
+        """Finalize results with timing information."""
+        end_time = time.time()
+        self.processing_end_time = datetime.now().isoformat()
+        self.processing_duration_seconds = end_time - self.start_time
 
 
 def find_audio_files(input_dir: str) -> List[Path]:
@@ -122,13 +224,12 @@ def get_output_paths(
         "normalized_vocals_wav": song_folder / f"{filename_stem}_vocal_normalized.wav",
         "transcript_txt": song_folder / f"{filename_stem}_transcript.txt",
         "transcript_word_txt": song_folder / f"{filename_stem}_transcript_word.txt",
-        "corrected_transcript_txt": song_folder
-        / f"{filename_stem}_corrected_transcript.txt",
-        "song_identification": song_folder
-        / f"{filename_stem}_song_identification.json",
+        "corrected_transcript_txt": song_folder / f"{filename_stem}_corrected_transcript.txt",
+        "song_identification": song_folder / f"{filename_stem}_song_identification.json",
         "lyrics_txt": song_folder / f"{filename_stem}_lyrics.txt",
         "lrc": song_folder / f"{filename_stem}.lrc",
         "explanation_txt": song_folder / f"{filename_stem}_explanation.md",
+        "song_story": song_folder / f"{filename_stem}_song_story.json",
         "corrected_lrc": song_folder / f"{filename_stem}_corrected.lrc",
         "translated_lrc": nested_output_path / f"{filename_stem}.lrc",
     }
@@ -179,7 +280,7 @@ def load_prompt_template(prompt_file: str, **kwargs) -> str | None:
         return None
 
 
-def read_file(file_path: str) -> str:
+def read_file(file_path: str | Path) -> str:
     """
     Read file and return its content as a string.
 
@@ -193,24 +294,9 @@ def read_file(file_path: str) -> str:
         return f.read()
 
 
-def write_file(file_path: str, content: str) -> bool:
-    """
-    Write content to a file.
-
-    Args:
-        file_path (str): Path to the file to write
-        content (str): Content to write to the file
-
-    Returns:
-        bool: True if writing was successful, False otherwise
-    """
-    try:
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        return True
-    except Exception as e:
-        logger.exception(f"Error writing to file {file_path}: {e}")
-        return False
+def write_file(file_path: str, content: str):
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(content)
 
 
 def validate_lrc_content(content: str) -> bool:
@@ -231,7 +317,7 @@ def validate_lrc_content(content: str) -> bool:
         return False
 
     # Check for proper LRC timestamp format in at least some lines
-    timestamp_pattern = r"\[([0-9]{2,3}:[0-9]{2}\.[0-9]{2,3}|[0-9]{2,3}:[0-9]{2})\]"
+    timestamp_pattern = r"\[(\d{2,3}:\d{2}\.\d{2,3}|\d{2,3}:\d{2})\]"
     has_timestamps = any(re.search(timestamp_pattern, line) for line in lines)
 
     if not has_timestamps:
@@ -263,7 +349,6 @@ def convert_transcript_to_lrc(transcript_text: str) -> str:
         match = re.match(r"\[([\d.]+)s -> ([\d.]+)s\]\s*(.*)", line.strip())
         if match:
             start_time = float(match.group(1))
-            end_time = float(match.group(2))
             text = match.group(3).strip()
 
             if text:  # Only add non-empty lines
@@ -370,13 +455,13 @@ def get_prompt_file_for_language(target_language: str, task: str) -> str:
         )
 
 
-def write_csv_results(csv_file_path: str, results: list) -> bool:
+def write_csv_results(csv_file_path: str, results: List[ProcessingResults]) -> bool:
     """
     Write processing results to CSV file.
 
     Args:
         csv_file_path (str): Path to the CSV file to write
-        results (list): List of result dictionaries to write
+        results (List[ProcessingResults]): List of ProcessingResults objects to write
 
     Returns:
         bool: True if writing was successful, False otherwise
@@ -389,57 +474,8 @@ def write_csv_results(csv_file_path: str, results: list) -> bool:
 
     try:
         with open(csv_file_path, "w", newline="", encoding="utf-8") as csvfile:
-            # Define CSV columns based on our data structure
-            fieldnames = [
-                # File information
-                "filename",
-                "file_path",
-                "processing_start_time",
-                # Metadata extraction results
-                "metadata_success",
-                "metadata_title",
-                "metadata_artist",
-                "metadata_album",
-                "metadata_genre",
-                "metadata_year",
-                "metadata_track_number",
-                # Vocal separation results
-                "vocals_separation_success",
-                "vocals_file_path",
-                "vocals_file_size",
-                # Transcription results
-                "transcription_success",
-                "transcription_segments_count",
-                "transcription_duration",
-                # Lyrics search results
-                "lyrics_search_success",
-                "lyrics_source",
-                "lyrics_length",
-                "lyrics_line_count",
-                # Grammatical correction results
-                "grammatical_correction_success",
-                "grammatical_correction_applied",
-                # LRC generation results
-                "lrc_generation_success",
-                "lrc_line_count",
-                "lrc_has_timestamps",
-                # Timestamp verification results
-                "timestamp_verification_success",
-                "timestamp_corrections_applied",
-                "corrected_lrc_path",
-                # Translation results
-                "translation_success",
-                "translation_target_language",
-                # Explanation results
-                "explanation_success",
-                "explanation_target_language",
-                "explanation_length",
-                # Overall results
-                "overall_success",
-                "processing_end_time",
-                "processing_duration_seconds",
-                "error_message",
-            ]
+            # Extract fieldnames dynamically from the Pydantic model
+            fieldnames = list(ProcessingResults.model_fields.keys())
 
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
@@ -448,7 +484,7 @@ def write_csv_results(csv_file_path: str, results: list) -> bool:
 
             # Write data rows
             for result in results:
-                writer.writerow(result)
+                writer.writerow(result.model_dump())
 
         logger.info(f"CSV results written to: {csv_file_path}")
         return True
@@ -548,6 +584,16 @@ def get_translation_config() -> Dict[str, str]:
     return config
 
 
+def get_default_target_language() -> str:
+    """
+    Get default target language from environment variable.
+
+    Returns:
+        str: Target language from DEFAULT_TARGET_LANGUAGE env var, or "English" if not set
+    """
+    return os.getenv("DEFAULT_TARGET_LANGUAGE", "English")
+
+
 def get_base_argparser(
     description: str, search: bool = False
 ) -> argparse.ArgumentParser:
@@ -573,6 +619,11 @@ def get_base_argparser(
         "--logfire",
         action="store_true",
         help="Enable Logfire logging if set",
+    )
+    parser.add_argument(
+        "--recompute",
+        action="store_true",
+        help="Force recomputation even if output files exist",
     )
 
     if search:

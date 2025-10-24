@@ -61,14 +61,70 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 
+def _setup_logfire(logger: logging.Logger, enable_logfire: bool) -> None:
+    """Set up Logfire observability if enabled."""
+    if not enable_logfire:
+        return
+
+    try:
+        logfire.configure(
+            token=os.getenv("LOGFIRE_WRITE_TOKEN"),
+            console=False,  # Disable console output from Logfire
+        )
+        logfire.instrument_pydantic_ai()
+        # logfire.instrument_httpx(capture_all=True)
+
+        # Create handler that only sends to Logfire service
+        logfire_handler = logfire.LogfireLoggingHandler()
+        logger.addHandler(logfire_handler)
+    except Exception as e:
+        # Log the error but don't fail the entire setup
+        print(f"Warning: Failed to configure Logfire: {e}", file=sys.stderr)
+
+
+def _setup_console_handler(logger: logging.Logger, formatter: logging.Formatter, use_colors: bool) -> None:
+    """Set up the console handler with optional color support."""
+    console_handler = logging.StreamHandler(sys.stdout)
+
+    if use_colors:
+        # Check if terminal supports colors
+        if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+            # Use colored formatter for console
+            colored_formatter = ColoredFormatter(
+                formatter._fmt, datefmt=formatter.datefmt
+            )
+            console_handler.setFormatter(colored_formatter)
+        else:
+            console_handler.setFormatter(formatter)
+    else:
+        console_handler.setFormatter(formatter)
+
+    # Add console handler for consistent formatting
+    logger.addHandler(console_handler)
+
+
+def _setup_file_handler(logger: logging.Logger, formatter: logging.Formatter, log_file: str | None) -> None:
+    """Set up the file handler if a log file is specified."""
+    if not log_file:
+        return
+
+    # Create directory if it doesn't exist
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+
 def setup_logging(
-    level=logging.INFO,
-    log_file=None,
-    log_format=None,
-    clear_handlers=True,
-    use_colors=True,
-    enable_logfire=False,
-):
+    level: int = logging.INFO,
+    log_file: str | None = None,
+    log_format: str | None = None,
+    clear_handlers: bool = True,
+    use_colors: bool = True,
+    enable_logfire: bool = False,
+) -> logging.Logger:
     """
     Set up consistent logging configuration for all scripts.
 
@@ -79,6 +135,9 @@ def setup_logging(
         clear_handlers: Whether to clear existing handlers (default: True)
         use_colors: Whether to use colored output for console (default: True)
         enable_logfire: Whether to enable Logfire observability (default: False)
+
+    Returns:
+        Configured logger instance
     """
     # Default log format
     if log_format is None:
@@ -95,59 +154,14 @@ def setup_logging(
     if clear_handlers:
         logger.handlers.clear()
 
-    # Configure Logfire if enabled
-    if enable_logfire:
-        try:
-            logfire.configure(
-                # environment=os.getenv('LOGFIRE_ENVIRONMENT', 'development'),
-                token=os.getenv("LOGFIRE_WRITE_TOKEN"),
-                console=False,  # Disable console output from Logfire
-            )
-            logfire.instrument_pydantic_ai()
-            # logfire.instrument_httpx(capture_all=True)
+    # Set up Logfire if enabled
+    _setup_logfire(logger, enable_logfire)
 
-            # Create handler that only sends to Logfire service
-            logfire_handler = logfire.LogfireLoggingHandler()
-            logger.addHandler(logfire_handler)
-        except Exception as e:
-            # Log the error but don't fail the entire setup
-            print(f"Warning: Failed to configure Logfire: {e}", file=sys.stderr)
+    # Set up console handler
+    _setup_console_handler(logger, formatter, use_colors)
 
-    # Console handler with color support
-    console_handler = logging.StreamHandler(sys.stdout)
-
-    # Use colored formatter for console if requested and supported
-    if use_colors:
-        try:
-            # Test if terminal supports colors (basic check)
-            import shutil
-
-            if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
-                # Use colored formatter for console
-                colored_formatter = ColoredFormatter(
-                    log_format, datefmt="%Y-%m-%d %H:%M:%S"
-                )
-                console_handler.setFormatter(colored_formatter)
-            else:
-                console_handler.setFormatter(formatter)
-        except Exception:
-            # Fall back to regular formatter if color setup fails
-            console_handler.setFormatter(formatter)
-    else:
-        console_handler.setFormatter(formatter)
-
-    # Add console handler for consistent formatting
-    logger.addHandler(console_handler)
-
-    # File handler if specified
-    if log_file:
-        # Create directory if it doesn't exist
-        log_dir = os.path.dirname(log_file)
-        if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+    # Set up file handler if specified
+    _setup_file_handler(logger, formatter, log_file)
 
     return logger
 

@@ -101,76 +101,13 @@ def init_agent(system_prompt: str, max_search_results: int = 5):
 
 
 def search_song_story(
-    song_title: str, artist_name: str, native_language: str, max_search_results: int = 5
-) -> Optional[SongStory]:
-    """
-    Search for background story of a song using title, artist, and language information.
-
-    Args:
-        song_title: Title of the song
-        artist_name: Name of the artist
-        native_language: Native language of the song
-
-    Returns:
-        Song story information or None if search fails
-    """
-    if not song_title or not artist_name or not native_language:
-        logger.error(
-            "Missing required parameters: song_title, artist_name, or native_language"
-        )
-        return None
-
-    try:
-        user_prompt = f"song_title: {song_title}\nartist_name: {artist_name}\nnative_language: {native_language}\n"
-
-        # Use Pydantic AI agent to run the story search with remote MCP server
-        logger.info(
-            f"Searching for background story of '{song_title}' by '{artist_name}'"
-        )
-
-        agent = init_agent(
-            load_prompt_template("song_story_search_prompt.txt"),
-            max_search_results=max_search_results,
-        )
-
-        result = agent.run_sync(user_prompt)
-
-        logger.debug("Agent.run_sync() completed successfully for story search")
-
-        if not result or not result.output:
-            logger.exception(
-                "No result returned from Pydantic AI agent for story search"
-            )
-            return None
-
-        story_result = result.output
-        logger.debug(f"Story result: {story_result}")
-
-        # Validate required fields
-        if not story_result.creation_story:
-            logger.warning("Missing story summary in result")
-            return None
-
-        logger.info(
-            f"Successfully found story for '{story_result.song_title}' "
-            f"by '{story_result.artist_name}' "
-            f"({story_result.story_type}) - "
-        )
-        return story_result
-
-    except Exception as e:
-        logger.exception(f"Error during song story search: {e}")
-        return None
-
-
-def search_song_story_from_identification(
     song_title: str,
     artist_name: str,
     native_language: str,
     paths: dict,
-    force_recompute: bool = False,
+    recompute: bool = False,
     max_search_results: int = 5,
-) -> Optional[Tuple[str, str, str, List[str], str]]:
+) -> bool:
     """
     Search for song background story with caching support.
 
@@ -184,70 +121,63 @@ def search_song_story_from_identification(
     Returns:
         Optional[Tuple]: (story_type, creation_story, story_details, sources_used, reasoning) if found, None otherwise
     """
-    result_file_path = str(paths.get("song_story", "song_story_result.json"))
+    result_file_path = paths['song_story']
 
     # Try to load existing result if file path provided and not forcing recompute
-    if not force_recompute and result_file_path and Path(result_file_path).exists():
-        try:
-            with open(result_file_path, "r", encoding="utf-8") as f:
-                cached_result = json.load(f)
+    if not recompute and result_file_path and Path(result_file_path).exists():
+        logger.info(f"Song story result file found at: {result_file_path}, skipping search")
+        return True
 
-            if cached_result:
-                logger.info(
-                    f"Trying to load cached song story from: {result_file_path}"
-                )
-                result = SongStory(**cached_result)
+    if not song_title or not artist_name:
+        logger.error("Missing required parameters: song_title, artist_name")
+        return False
 
-                return (
-                    result.story_type,
-                    result.creation_story,
-                    result.background_story,
-                    result.sources_used,
-                    result.reasoning,
-                )
+    try:
+        user_prompt = f"song_title: {song_title}\nartist_name: {artist_name}\nnative_language: {native_language}\n"
 
-        except Exception as e:
-            logger.warning(f"Failed to load cached song story: {e}")
+        logger.info(f"Searching for background story of '{song_title}' by '{artist_name}'")
 
-    # Perform new story search
-    result = search_song_story(
-        song_title, artist_name, native_language, max_search_results
-    )
-
-    if result:
-        story_info = (
-            result.story_type,
-            result.creation_story,
-            result.background_story,
-            result.sources_used,
-            result.reasoning,
+        agent = init_agent(
+            load_prompt_template("song_story_search_prompt.txt"),
+            max_search_results=max_search_results,
         )
 
-        # Save result if file path provided
-        if result_file_path:
-            try:
-                # Ensure directory exists
-                Path(result_file_path).parent.mkdir(parents=True, exist_ok=True)
+        result = agent.run_sync(user_prompt)
 
-                # Save full result for future use - dynamically create from SongStory model
-                result_data = result.model_dump(mode="json")
+        logger.debug("Agent.run_sync() completed successfully for story search")
 
-                with open(result_file_path, "w", encoding="utf-8") as f:
-                    json.dump(result_data, f, ensure_ascii=False, indent=2)
+        if not result or not result.output:
+            logger.error("No result returned from Pydantic AI agent for story search")
+            return False
 
-                logger.info(f"Saved song story result to: {result_file_path}")
-
-            except Exception as e:
-                logger.warning(f"Failed to save song story result: {e}")
+        story_result = result.output
+        logger.debug(f"Story result: {story_result}")
 
         logger.info(
-            f"Successfully found story for '{result.song_title}' by '{result.artist_name}': {result.story_type}"
+            f"Successfully found story for '{story_result.song_title}' "
+            f"by '{story_result.artist_name}' "
+            f"({story_result.story_type}) - "
         )
-        return story_info
-    else:
-        logger.warning(f"No story search result for '{song_title}' by '{artist_name}'")
 
-    return None
+    except Exception:
+        logger.exception("Error during song story search")
+        return False
+
+    try:
+
+        # Save full result for future use - dynamically create from SongStory model
+        result_data = result.output.model_dump(mode="json")
+
+        with open(result_file_path, "w", encoding="utf-8") as f:
+            json.dump(result_data, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"Saved song story result to: {result_file_path}")
+
+    except Exception:
+        logger.exception("Failed to save song story result")
+        return False
+
+    return True
 
 
 def main():
@@ -283,28 +213,23 @@ def main():
     max_search_results = args.max_search_results
     if max_search_results == 5:  # If using default, check environment variable
         max_search_results = int(os.getenv("MAX_SEARCH_RESULTS", "5"))
+        
+    output_path = Path(args.result_file) if args.result_file else Path("song_story_result.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     paths = {
-        "song_story": (
-            args.result_file if args.result_file else "song_story_result.json"
-        ),
+        "song_story": output_path,
     }
-    result = search_song_story_from_identification(
+    
+    search_song_story(
         args.title,
         args.artist,
         args.language,
         paths,
         max_search_results=max_search_results,
+        recompute=args.recompute,
     )
-
-    if result:
-        logger.info("Successfully retrieved song story")
-        return 0
-    else:
-        logger.info("Could not find background story for the song")
-        return 1
 
 
 if __name__ == "__main__":
-    result = main()
-    exit(result)
+    main()

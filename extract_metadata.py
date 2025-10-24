@@ -19,16 +19,204 @@ Pipeline Stage: 1/6 (Metadata Extraction)
 """
 
 import os
+from pathlib import Path
+
 from mutagen import File
 from mutagen.id3 import ID3NoHeaderError
 from mutagen.flac import FLACNoHeaderError, FLAC
+
 import logging
 from logging_config import setup_logging, get_logger
+from utils import get_base_argparser
 
 logger = get_logger(__name__)
 
 
-def extract_metadata(file_path):
+def extract_and_validate_value(value):
+    """
+    Extract and validate a metadata value, handling lists, None, and empty values.
+
+    Args:
+        value: The raw value from metadata tags
+
+    Returns:
+        str or None: The extracted string value if valid, else None
+    """
+    if value is None:
+        return None
+    if isinstance(value, list):
+        if len(value) > 0 and value[0] is not None:
+            extracted = str(value[0]).strip()
+            return extracted if extracted else None
+        return None
+    else:
+        extracted = str(value).strip()
+        return extracted if extracted else None
+
+
+def update_metadata_field_if_none(metadata: dict, field: str, value) -> None:
+    """
+    Update a metadata field if it is currently None.
+
+    Args:
+        metadata (dict): The metadata dictionary to update
+        field (str): The field name to update
+        value: The raw value to extract and validate
+    """
+    if metadata[field] is None:
+        extracted_value = extract_and_validate_value(value)
+        if extracted_value:
+            metadata[field] = extracted_value
+
+
+# Priority map for tag keys to reduce cognitive complexity
+PRIORITY_MAP = {
+    # Title tags (priority 10)
+    "title": 10, "tracktitle": 10, "©nam": 10, "tit2": 10, "tit3": 10,
+    # Primary artist tags (priority 20)
+    "artist": 20, "albumartist": 20, "tpe1": 20, "tpe2": 20, "©art": 20,
+    "aart": 20, "tp1": 20, "tp2": 20,
+    # Secondary artist tags (priority 30)
+    "composer": 30, "band": 30, "ensemble": 30, "tpe3": 30, "tpe4": 30,
+    "tcom": 30, "text": 30,
+    # Album tags (priority 40)
+    "album": 40, "©alb": 40, "talb": 40,
+    # Genre tags (priority 50)
+    "genre": 50, "©gen": 50, "tcon": 50, "gnre": 50,
+    # Year/Date tags (priority 60)
+    "date": 60, "year": 60, "©day": 60, "tdrc": 60, "tyer": 60,
+    # Track number tags (priority 70)
+    "tracknumber": 70, "track": 70, "©trk": 70, "trck": 70,
+    # Other tags (priority 80)
+}
+
+
+def update_title(metadata: dict, value) -> None:
+    """Update title field if None."""
+    update_metadata_field_if_none(metadata, "title", value)
+
+
+def update_artist(metadata: dict, value) -> None:
+    """Update artist field if None."""
+    update_metadata_field_if_none(metadata, "artist", value)
+
+
+def update_album(metadata: dict, value) -> None:
+    """Update album field if None."""
+    update_metadata_field_if_none(metadata, "album", value)
+
+
+def update_genre(metadata: dict, value) -> None:
+    """Update genre field if None."""
+    update_metadata_field_if_none(metadata, "genre", value)
+
+
+def update_year(metadata: dict, value) -> None:
+    """Update year field if None."""
+    update_metadata_field_if_none(metadata, "year", value)
+
+
+def update_track_number(metadata: dict, value) -> None:
+    """Update track_number field if None."""
+    update_metadata_field_if_none(metadata, "track_number", value)
+
+
+# Mapping of tag keys to update functions
+UPDATE_FUNCTIONS = {
+    # Title
+    "title": update_title, "tracktitle": update_title, "©nam": update_title,
+    "tit2": update_title, "tit3": update_title,
+    # Artist (primary and secondary)
+    "artist": update_artist, "albumartist": update_artist, "tpe1": update_artist,
+    "tpe2": update_artist, "©art": update_artist, "aart": update_artist,
+    "tp1": update_artist, "tp2": update_artist, "composer": update_artist,
+    "band": update_artist, "ensemble": update_artist, "tpe3": update_artist,
+    "tpe4": update_artist, "tcom": update_artist, "text": update_artist,
+    # Album
+    "album": update_album, "©alb": update_album, "talb": update_album,
+    # Genre
+    "genre": update_genre, "©gen": update_genre, "tcon": update_genre, "gnre": update_genre,
+    # Year
+    "date": update_year, "year": update_year, "©day": update_year, "tdrc": update_year, "tyer": update_year,
+    # Track number
+    "tracknumber": update_track_number, "track": update_track_number, "©trk": update_track_number, "trck": update_track_number,
+}
+
+
+def load_audio_file(file_path: str):
+    """
+    Load audio file and extract tags based on file type.
+
+    Args:
+        file_path (str): Path to the audio file
+
+    Returns:
+        tuple: (audio_file, tags) where tags may be None
+    """
+    if file_path.lower().endswith(".flac"):
+        # Use mutagen's FLAC class specifically for FLAC files
+        audio_file = FLAC(file_path)
+        tags = audio_file.tags
+    else:
+        # Use generic File class for other formats
+        audio_file = File(file_path)
+        tags = audio_file.tags
+
+    return audio_file, tags
+
+
+def parse_filename_for_metadata(file_path: str, metadata: dict) -> dict:
+    """
+    Parse filename to extract metadata when no tags are available.
+
+    Args:
+        file_path (str): Path to the audio file
+        metadata (dict): Current metadata dictionary
+
+    Returns:
+        dict: Updated metadata dictionary
+    """
+    filename = os.path.basename(file_path)
+    name_without_ext = os.path.splitext(filename)[0]
+
+    # Try to extract artist and title from filename like "Artist - Title"
+    if " - " in name_without_ext:
+        parts = name_without_ext.split(" - ", 1)
+        if len(parts) >= 2:
+            metadata["artist"] = parts[0].strip()
+            metadata["title"] = parts[1].strip()
+    else:
+        metadata["title"] = name_without_ext
+
+    return metadata
+
+
+def process_tags_with_priority(tags: dict, metadata: dict) -> None:
+    """
+    Process tags in priority order using update functions.
+
+    Args:
+        tags (dict): Raw tags from audio file
+        metadata (dict): Metadata dictionary to update
+    """
+    # Create prioritized list of tags based on priority map
+    prioritized_tags = []
+    for key, value in tags.items():
+        key_lower = key.lower()
+        priority = PRIORITY_MAP.get(key_lower, 80)  # Default to 80 for unknown tags
+        prioritized_tags.append((priority, key_lower, value))
+
+    # Sort by priority (lower number = higher priority)
+    prioritized_tags.sort(key=lambda x: x[0])
+
+    # Process tags in priority order using update functions
+    for priority, key_lower, value in prioritized_tags:
+        update_func = UPDATE_FUNCTIONS.get(key_lower)
+        if update_func:
+            update_func(metadata, value)
+
+
+def extract_metadata(file_path: str) -> dict:
     """
     Extract song name and artist from audio file metadata.
 
@@ -48,193 +236,12 @@ def extract_metadata(file_path):
     }
 
     try:
-        if file_path.lower().endswith(".flac"):
-            # Use mutagen's FLAC class specifically for FLAC files
-            audio_file = FLAC(file_path)
-            tags = audio_file.tags
-        else:
-            # Use generic File class for other formats
-            audio_file = File(file_path)
-            tags = audio_file.tags
+        _, tags = load_audio_file(file_path)
 
         if tags is None:
-            # For formats without tags, try to extract from filename
-            filename = os.path.basename(file_path)
-            name_without_ext = os.path.splitext(filename)[0]
-            # Try to extract artist and title from filename like "Artist - Title"
-            if " - " in name_without_ext:
-                parts = name_without_ext.split(" - ", 1)
-                if len(parts) >= 2:
-                    metadata["artist"] = parts[0].strip()
-                    metadata["title"] = parts[1].strip()
-            else:
-                metadata["title"] = name_without_ext
-            return metadata
+            return parse_filename_for_metadata(file_path, metadata)
 
-        # Define priority order for processing tags to ensure higher priority tags are processed first
-        # Create a list of tuples (priority, tag_key, tag_value) to sort by priority
-        prioritized_tags = []
-        for key, value in tags.items():
-            key_lower = key.lower()
-
-            # Define priorities: 0 = highest priority, higher numbers = lower priority
-            if key_lower in ["title", "tracktitle", "©nam", "tit2", "tit3", "title"]:
-                priority = 10  # Title
-            elif key_lower in [
-                "artist",
-                "albumartist",
-                "tpe1",
-                "tpe2",
-                "©art",
-                "aart",
-                "tp1",
-                "tp2",
-            ]:
-                priority = 20  # Primary artist tags
-            elif key_lower in [
-                "composer",
-                "band",
-                "ensemble",
-                "©art",
-                "tpe3",
-                "tpe4",
-                "tcom",
-                "text",
-            ]:
-                priority = 30  # Secondary artist tags (composer, etc.)
-            elif key_lower in ["album", "©alb", "talb"]:
-                priority = 40  # Album
-            elif key_lower in ["genre", "©gen", "tcon", "gnre"]:
-                priority = 50  # Genre
-            elif key_lower in ["date", "year", "©day", "tdrc", "tyer"]:
-                priority = 60  # Year/Date
-            elif key_lower in ["tracknumber", "track", "©trk", "trck"]:
-                priority = 70  # Track number
-            else:
-                priority = 80  # Other tags (lowest priority)
-
-            prioritized_tags.append((priority, key_lower, value))
-
-        # Sort by priority (lower number = higher priority)
-        prioritized_tags.sort(key=lambda x: x[0])
-
-        # Process tags in priority order
-        for priority, key_lower, value in prioritized_tags:
-            # Title fields
-            if key_lower in ["title", "tracktitle", "©nam", "tit2", "tit3", "title"]:
-                if metadata["title"] is None:
-                    # Handle both single values and lists - if it's a list with elements, take the first one
-                    extracted_value = (
-                        str(value[0])
-                        if isinstance(value, list) and len(value) > 0
-                        else str(value)
-                    )
-                    if (
-                        extracted_value and extracted_value.strip()
-                    ):  # Check if value is not None, empty, or just whitespace
-                        metadata["title"] = extracted_value
-
-            # Artist fields - prioritize main artist tags
-            elif key_lower in [
-                "artist",
-                "albumartist",
-                "tpe1",
-                "tpe2",
-                "©art",
-                "aart",
-                "tp1",
-                "tp2",
-            ]:
-                if metadata["artist"] is None:
-                    # Handle both single values and lists - if it's a list with elements, take the first one
-                    extracted_value = (
-                        str(value[0])
-                        if isinstance(value, list) and len(value) > 0
-                        else str(value)
-                    )
-                    if (
-                        extracted_value and extracted_value.strip()
-                    ):  # Check if value is not None, empty, or just whitespace
-                        metadata["artist"] = extracted_value
-
-            # Secondary artist fields (composer, etc.) - only if no primary artist found
-            elif key_lower in [
-                "composer",
-                "band",
-                "ensemble",
-                "©art",
-                "tpe3",
-                "tpe4",
-                "tcom",
-                "text",
-            ]:
-                if metadata["artist"] is None:
-                    # Handle both single values and lists - if it's a list with elements, take the first one
-                    extracted_value = (
-                        str(value[0])
-                        if isinstance(value, list) and len(value) > 0
-                        else str(value)
-                    )
-                    if (
-                        extracted_value and extracted_value.strip()
-                    ):  # Check if value is not None, empty, or just whitespace
-                        metadata["artist"] = extracted_value
-
-            # Album fields
-            elif key_lower in ["album", "©alb", "talb"]:
-                if metadata["album"] is None:
-                    # Handle both single values and lists - if it's a list with elements, take the first one
-                    extracted_value = (
-                        str(value[0])
-                        if isinstance(value, list) and len(value) > 0
-                        else str(value)
-                    )
-                    if (
-                        extracted_value and extracted_value.strip()
-                    ):  # Check if value is not None, empty, or just whitespace
-                        metadata["album"] = extracted_value
-
-            # Genre fields
-            elif key_lower in ["genre", "©gen", "tcon", "gnre"]:
-                if metadata["genre"] is None:
-                    # Handle both single values and lists - if it's a list with elements, take the first one
-                    extracted_value = (
-                        str(value[0])
-                        if isinstance(value, list) and len(value) > 0
-                        else str(value)
-                    )
-                    if (
-                        extracted_value and extracted_value.strip()
-                    ):  # Check if value is not None, empty, or just whitespace
-                        metadata["genre"] = extracted_value
-
-            # Year/Date fields
-            elif key_lower in ["date", "year", "©day", "tdrc", "tyer"]:
-                if metadata["year"] is None:
-                    # Handle both single values and lists - if it's a list with elements, take the first one
-                    extracted_value = (
-                        str(value[0])
-                        if isinstance(value, list) and len(value) > 0
-                        else str(value)
-                    )
-                    if (
-                        extracted_value and extracted_value.strip()
-                    ):  # Check if value is not None, empty, or just whitespace
-                        metadata["year"] = extracted_value
-
-            # Track number fields
-            elif key_lower in ["tracknumber", "track", "©trk", "trck"]:
-                if metadata["track_number"] is None:
-                    # Handle both single values and lists - if it's a list with elements, take the first one
-                    extracted_value = (
-                        str(value[0])
-                        if isinstance(value, list) and len(value) > 0
-                        else str(value)
-                    )
-                    if (
-                        extracted_value and extracted_value.strip()
-                    ):  # Check if value is not None, empty, or just whitespace
-                        metadata["track_number"] = extracted_value
+        process_tags_with_priority(tags, metadata)
 
     except ID3NoHeaderError:
         logger.warning(f"No ID3 header found in {file_path}")
@@ -252,26 +259,15 @@ def main():
 
     load_dotenv()
 
-    # Set up argument parser
-    import argparse
-
-    parser = argparse.ArgumentParser(
+    parser = get_base_argparser(
         description="Extract song name and artist name from audio file metadata."
     )
+
     parser.add_argument(
         "file_path",
         nargs="?",
         default="input/0017480280.flac",
         help="Path to the audio file to extract metadata from",
-    )
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Logging level (default: INFO)",
-    )
-    parser.add_argument(
-        "--logfire", action="store_true", help="Enable Logfire integration"
     )
 
     args = parser.parse_args()
@@ -281,17 +277,17 @@ def main():
     setup_logging(level=log_level, enable_logfire=args.logfire)
 
     # Define the input file path
-    input_file = args.file_path
+    input_file = Path(args.file_path)
 
     # Check if the input file exists
-    if not os.path.exists(input_file):
-        logger.exception(f"Input file does not exist: {input_file}")
+    if not input_file.exists():
+        logger.error(f"Input file does not exist: {input_file}")
         return
 
     logger.info(f"Extracting metadata from: {input_file}")
 
     # Extract metadata
-    metadata = extract_metadata(input_file)
+    metadata = extract_metadata(str(input_file))
 
     # Print the extracted metadata
     logger.info("Extracted Metadata:")

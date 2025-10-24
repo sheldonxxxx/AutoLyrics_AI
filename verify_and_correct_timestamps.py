@@ -17,21 +17,25 @@ Key Features:
 Pipeline Stage: 5.5/6 (Timestamp Verification and Correction)
 """
 
-import os
 import logging
+from pathlib import Path
 from logging_config import setup_logging, get_logger
 from utils import (
     load_prompt_template,
     get_default_llm_config,
     convert_transcript_to_lrc,
     get_base_argparser,
+    read_file,
+    validate_lrc_content,
 )
 from agent_utils import prepare_agent
 
 logger = get_logger(__name__)
 
 
-def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str | None:
+def verify_and_correct_timestamps(
+    lrc_content: str, asr_transcript: str, paths: dict, recompute: bool = False
+) -> bool:
     """
     Verify and correct LRC timestamps using ASR transcript as reference.
 
@@ -39,12 +43,22 @@ def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str 
     inaccuracies while preserving the original lyrics content exactly.
 
     Args:
-        lrc_content (str): Current LRC content with potentially incorrect timestamps
-        asr_transcript (str): ASR transcript with accurate word-level timestamps
+        paths (dict): Dictionary containing file paths:
+            - "lrc": Path to the LRC file to verify
+            - "transcript_word_txt": Path to the ASR transcript file
+            - "corrected_lrc": Path to save the corrected LRC file
+        recompute (bool): If True, forces re-verification even if output exists
 
     Returns:
-        str | None: Corrected LRC content with fixed timestamps, or None if error
+        bool: True if verification and correction succeeded, False otherwise
     """
+    result_file_path = paths["corrected_lrc"]
+
+    # Check if output already exists
+    if not recompute and result_file_path.exists():
+        logger.info(f"Corrected LRC already exists at: {result_file_path}")
+        return True
+
     # Load prompt template from file
     asr_transcript = convert_transcript_to_lrc(asr_transcript)
 
@@ -53,7 +67,7 @@ def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str 
 
     if not system_prompt:
         logger.exception("Failed to load timestamp verification prompt template")
-        return None
+        return False
 
     user_prompt = f"ASR Transcript:\n{asr_transcript}\n\nLRC Content:\n{lrc_content}"
     try:
@@ -70,20 +84,30 @@ def verify_and_correct_timestamps(lrc_content: str, asr_transcript: str) -> str 
         # Use the agent to verify and correct timestamps
         result = agent.run_sync(user_prompt)
 
-        if result and result.output:
-            corrected_lrc = result.output.strip()
+        if result and result.output and validate_lrc_content(result.output):
             logger.info("Timestamp verification and correction completed successfully")
-            logger.debug(
-                f"Corrected LRC content length: {len(corrected_lrc)} characters"
-            )
-            return corrected_lrc
-        else:
-            logger.exception("No result returned from timestamp verification agent")
-            return None
 
-    except Exception as e:
-        logger.exception(f"Error during timestamp verification and correction: {e}")
-        return None
+            # Count corrections by comparing original and corrected content
+            corrected_lrc_content = result.output.strip()
+            original_lines = set(lrc_content.strip().split("\n"))
+            corrected_lines = set(corrected_lrc_content.split("\n"))
+            corrections_count = len(
+                original_lines.symmetric_difference(corrected_lines)
+            )
+
+            logger.info(f"Number of corrections applied: {corrections_count}")
+
+            with open(result_file_path, "w", encoding="utf-8") as f:
+                f.write(result.output.strip())
+            logger.info(f"Corrected LRC saved to: {result_file_path}")
+            return True
+        else:
+            logger.error("No result returned from timestamp verification agent")
+            return False
+
+    except Exception:
+        logger.exception("Error during timestamp verification and correction")
+        return False
 
 
 def main():
@@ -112,56 +136,34 @@ def main():
     setup_logging(level=log_level, enable_logfire=args.logfire)
 
     # Define file paths
-    lrc_file_path = args.lrc_file
-    transcript_file_path = args.transcript_file
-    output_lrc_path = args.output
+    lrc_file_path = Path(args.lrc_file)
+    transcript_file_path = Path(args.transcript_file)
+    output_lrc_path = Path(args.output)
 
     # Check if the input files exist
-    if not os.path.exists(lrc_file_path):
+    if not lrc_file_path.exists():
         logger.exception(f"LRC file does not exist: {lrc_file_path}")
         return
 
-    if not os.path.exists(transcript_file_path):
+    if not transcript_file_path.exists():
         logger.exception(f"Transcript file does not exist: {transcript_file_path}")
-        return
-
-    logger.info("Reading LRC and transcript files...")
-
-    # Read the LRC and transcript content
-    try:
-        with open(lrc_file_path, "r", encoding="utf-8") as f:
-            lrc_content = f.read()
-
-        with open(transcript_file_path, "r", encoding="utf-8") as f:
-            asr_transcript = f.read()
-
-    except Exception as e:
-        logger.exception(f"Error reading input files: {e}")
         return
 
     logger.info("Verifying and correcting LRC timestamps...")
 
+    output_lrc_path.parent.mkdir(parents=True, exist_ok=True)
+
+    paths = {
+        "corrected_lrc": output_lrc_path,
+    }
+
+    asr_transcript = read_file(transcript_file_path)
+    lrc_content = read_file(lrc_file_path)
+
     # Verify and correct timestamps
-    corrected_lrc = verify_and_correct_timestamps(lrc_content, asr_transcript)
-
-    if corrected_lrc:
-        logger.info("LRC timestamps verified and corrected successfully!")
-
-        # Create directory if it doesn't exist
-        output_dir = os.path.dirname(output_lrc_path)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-
-        # Save the corrected LRC content to a file
-        try:
-            with open(output_lrc_path, "w", encoding="utf-8") as f:
-                f.write(corrected_lrc)
-
-            logger.info(f"Corrected LRC file saved to: {output_lrc_path}")
-        except Exception as e:
-            logger.exception(f"Error saving corrected LRC file: {e}")
-    else:
-        logger.exception("Failed to verify and correct LRC timestamps.")
+    verify_and_correct_timestamps(
+        lrc_content, asr_transcript, paths, recompute=args.recompute
+    )
 
 
 if __name__ == "__main__":

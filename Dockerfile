@@ -58,7 +58,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     TEMP_DIR=/app/tmp
 
 # Create cache directory
-RUN mkdir -p $UV_CACHE_DIR && chown lyrics:lyrics $UV_CACHE_DIR
+RUN mkdir -p "$UV_CACHE_DIR" && chown lyrics:lyrics "$UV_CACHE_DIR"
 
 # Default command - can be overridden
 CMD ["python", "-m", "uv", "run", "process_lyrics.py", "--help"]

@@ -21,8 +21,8 @@ Supported Languages: Traditional Chinese (extensible architecture)
 Pipeline Stage: 6/6 (Translation)
 """
 
-import os
 import logging
+from pathlib import Path
 
 from logging_config import setup_logging, get_logger
 from utils import (
@@ -38,24 +38,30 @@ from agent_utils import prepare_agent
 logger = get_logger(__name__)
 
 
-def translate_lrc_content(lrc_content, target_language="Traditional Chinese"):
+def translate_lrc_content(
+    lrc_content: str, paths: dict, target_language: str, recompute: bool = False
+) -> bool:
     """
     Translate LRC content using an LLM, returning a bilingual LRC file.
 
     Args:
-        lrc_content (str): Complete LRC file content to translate
+        lrc_content (str): LRC content to translate
+        paths (dict): Dictionary containing file paths:
+            - "translated_lrc": Path to save the translated LRC file
         target_language (str): Target language for translation
-        model (str): Model name to use for translation
 
     Returns:
         str: Translated bilingual LRC content, or None if translation fails
     """
+    result_file_path = paths["translated_lrc"]
+
+    # Try to load existing result
+    if not recompute and result_file_path.exists():
+        logger.info(f"Translated LRC lyrics already exist at: {result_file_path}")
+        return True
 
     # Get the appropriate prompt file for the target language
     prompt_file_name = get_prompt_file_for_language(target_language, task="translation")
-    if not prompt_file_name:
-        logger.exception(f"No prompt file configured for language: {target_language}")
-        return None
 
     # Load prompt template from file
     system_prompt = load_prompt_template(
@@ -63,8 +69,8 @@ def translate_lrc_content(lrc_content, target_language="Traditional Chinese"):
     )
 
     if not system_prompt:
-        logger.exception(f"Failed to load system prompt: {prompt_file_name}")
-        return None
+        logger.error(f"Failed to load system prompt: {prompt_file_name}")
+        return False
 
     user_prompt = lrc_content
 
@@ -83,77 +89,25 @@ def translate_lrc_content(lrc_content, target_language="Traditional Chinese"):
         result = agent.run_sync(user_prompt)
 
         if result and result.output:
-            return result.output.strip()
+            if not validate_lrc_content(result.output):
+                logger.error("Translated LRC content is not valid")
+                return False
+            logger.info("Successfully translated LRC content")
+            with open(result_file_path, "w", encoding="utf-8") as f:
+                f.write(result.output.strip())
+            logger.info(f"Translated LRC content saved to: {result_file_path}")
+            return True
         else:
-            logger.exception("No result returned from translation agent")
-            return None
+            logger.error("No result returned from translation agent")
+            return False
 
     except Exception as e:
         logger.exception(f"Error translating LRC content: {e}")
-        return None
-
-
-def main(input_path, output_path, target_language):
-
-    # Get translation configuration using utility function
-    config = get_translation_config()
-
-    logger.debug(f"Using base_url: {config['base_url']}")
-    logger.debug(f"Using model: {config['model']}")
-
-    # Check if the input file exists
-    if not os.path.exists(input_path):
-        logger.exception(f"Input LRC file does not exist: {input_path}")
-        return False
-
-    logger.info("Reading LRC file...")
-
-    # Read the complete LRC file content
-    lrc_content = read_file(input_path)
-    logger.debug(f"Original LRC content length: {len(lrc_content)} characters")
-    logger.debug(
-        f"Original LRC content sample: {lrc_content[:300]}..."
-    )  # First 300 chars
-
-    logger.info("Translating LRC content to bilingual format...")
-
-    # Translate the entire LRC content
-    translated_lrc_content = translate_lrc_content(lrc_content, target_language)
-
-    if translated_lrc_content:
-        logger.info("LRC content translated successfully!")
-        logger.debug(
-            f"Translated LRC content length: {len(translated_lrc_content)} characters"
-        )
-        logger.debug(
-            f"Translated LRC content sample: {translated_lrc_content[:300]}..."
-        )  # First 30 chars
-
-        # Validate the translated content
-        if validate_lrc_content(translated_lrc_content):
-            logger.info("Translated LRC content validation passed")
-        else:
-            logger.warning(
-                "Translated LRC content validation failed, but saving anyway"
-            )
-
-        # Create directory if it doesn't exist
-        output_dir = os.path.dirname(output_path)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-
-        # Save the translated LRC to a file
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(translated_lrc_content)
-
-        logger.info(f"Bilingual LRC lyrics saved to: {output_path}")
-        return True
-    else:
-        logger.exception("Failed to translate LRC content.")
         return False
 
 
-if __name__ == "__main__":
+def main():
+
     parser = get_base_argparser(description="Translate LRC lyrics to another language")
     parser.add_argument("input", nargs="?", help="Input LRC file path")
     parser.add_argument("-o", "--output", help="Output LRC file path")
@@ -171,11 +125,32 @@ if __name__ == "__main__":
     setup_logging(level=log_level, enable_logfire=args.logfire)
 
     # Use default paths if not provided
-    input_path = args.input
-    output_path = args.output or input_path.replace(
-        ".lrc", f'_{args.language.replace(" ", "_")}.lrc'
+    input_path = Path(args.input)
+    output_path = (
+        Path(args.output) if args.output else Path(f"{input_path.stem}_bilingual.lrc")
+    )
+    target_language = args.language
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Check if the input file exists
+    if not input_path.exists():
+        logger.error(f"Input LRC file does not exist: {input_path}")
+        return False
+
+    logger.info("Translating LRC content to bilingual format...")
+
+    paths = {
+        "translated_lrc": output_path,
+    }
+
+    lrc_content = read_file(input_path)
+
+    # Translate the entire LRC content
+    translate_lrc_content(
+        lrc_content, paths, target_language, recompute=not args.recompute
     )
 
-    success = main(input_path, output_path, args.language, logfire_enabled=args.logfire)
-    if not success:
-        exit(1)
+
+if __name__ == "__main__":
+    main()
