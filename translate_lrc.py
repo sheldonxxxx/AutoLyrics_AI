@@ -39,7 +39,11 @@ logger = get_logger(__name__)
 
 
 def translate_lrc_content(
-    lrc_content: str, paths: dict, target_language: str, recompute: bool = False
+    lrc_content: str,
+    paths: dict,
+    target_language: str,
+    song_explanation: str = None,
+    recompute: bool = False,
 ) -> bool:
     """
     Translate LRC content using an LLM, returning a bilingual LRC file.
@@ -71,8 +75,13 @@ def translate_lrc_content(
     if not system_prompt:
         logger.error(f"Failed to load system prompt: {prompt_file_name}")
         return False
+    
+    user_prompt = ""
+    
+    if song_explanation:
+        user_prompt += f"Song explanation:\n{song_explanation}\n\n"
 
-    user_prompt = lrc_content
+    user_prompt += f"LRC content:\n{lrc_content}"
 
     try:
         # Get configuration for pydantic_ai

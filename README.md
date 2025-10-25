@@ -1,14 +1,14 @@
-# LyricSync AI
+# Music Lyrics Processing Pipeline
 
 🎵 **AI-Powered Lyrics Processing** → 🎤 **Vocal Separation** → 🔍 **Song Identification** → 📝 **Synchronized LRC**
 
-This project leverages advanced AI agents to process music files, automatically extracting lyrics, generating synchronized LRC format files, and providing translation capabilities through an intelligent multi-stage pipeline.
+Python-based pipeline that processes music files to extract lyrics, separate vocals, and generate synchronized LRC format lyrics with translation capabilities. This mature system features a well-structured modular architecture supporting both individual components and full pipeline processing.
 
 ## 🚀 Project Summary
 
 | **Input** | **Process** | **Output** |
 |-----------|-------------|------------|
-| Audio files (FLAC/MP3) | vocals separation  → transcribes → identifies songs → finds lyrics → syncs timestamps | Bilingual LRC files (Original + Target Language) |
+| Audio files | vocals separation  → transcribes → identifies songs → finds lyrics → syncs timestamps | Bilingual LRC files (Original + Target Language) |
 
 ## Features
 
@@ -35,7 +35,7 @@ This project leverages advanced AI agents to process music files, automatically 
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd AutoLyrics_AI
+cd music_lyric
 ```
 
 2. Install dependencies using uv:
@@ -190,88 +190,6 @@ This project has been tested and verified on:
 - Use `--log-level DEBUG` for detailed logging information
 - All processing steps are logged with timestamps for troubleshooting
 
-## Docker Deployment (Untested)
-
-The project includes a Dockerfile for easy deployment.
-
-### Quick Start with Docker
-
-1. **Build and run the container:**
-```bash
-# Build the image
-docker build -t music-lyrics-processor .
-
-# Run with default settings
-docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output music-lyrics-processor
-```
-
-2. **Using Docker Compose (recommended):**
-```bash
-# Start all services
-docker-compose up -d
-
-# Start only the lyrics processor
-docker-compose up -d lyrics-processor
-
-# Start with MCP server for web search
-docker-compose --profile mcp up -d
-
-# View logs
-docker-compose logs -f lyrics-processor
-```
-
-### Docker Configuration
-
-#### Environment Variables
-Create a `.env` file in your project root:
-```env
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
-
-# Optional: For web search functionality
-MCP_SEARXNG_SERVER_URL=http://localhost:3000/mcp
-SEARXNG_URL=http://localhost:8080
-
-# Optional: For logging and monitoring
-LOGFIRE_WRITE_TOKEN=your_logfire_token
-LOG_LEVEL=INFO
-```
-
-#### Volume Mounts
-- `./input:/app/input:ro` - Input audio files (read-only)
-- `./output:/app/output` - Generated LRC files
-- `./tmp:/app/tmp` - Temporary processing files
-- `./models:/app/models` - Audio separation models
-
-### Docker Commands
-
-#### Basic Usage
-```bash
-# Process audio files
-docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
-  music-lyrics-processor uv run process_lyrics.py /app/input
-
-# With custom settings
-docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
-  -e LOG_LEVEL=DEBUG \
-  music-lyrics-processor uv run process_lyrics.py /app/input --log-level DEBUG
-
-# Resume interrupted processing
-docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
-  music-lyrics-processor uv run process_lyrics.py /app/input --resume
-```
-
-#### Development Workflow
-```bash
-# Run a specific script
-docker run -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
-  music-lyrics-processor uv run extract_metadata.py /app/input/song.flac
-
-# Debug with bash shell
-docker run -it -v $(pwd)/input:/app/input:ro -v $(pwd)/output:/app/output \
-  --entrypoint /bin/bash music-lyrics-processor
-```
 
 ## Contributing
 

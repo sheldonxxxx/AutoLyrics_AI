@@ -22,8 +22,7 @@ def extract_web_content(text):
     # Remove URLs first
     text = re.sub(r"https?://\S+", "", text)
     text = re.sub(r"www\.\S+", "", text)
-    text = re.sub(r"--", "", text)
-    text = re.sub(r"|", "", text)
+    text = text.replace("--", "")
 
     lines = text.split("\n")
     cleaned_lines = []
@@ -38,6 +37,7 @@ def extract_web_content(text):
         # Remove ANY line containing brackets (link artifacts)
         if re.search(r"[\[\]]", stripped):
             continue
+
 
         # Remove lines with HTML/XML tags
         if re.search(r"<[^>]*>", stripped):
@@ -129,10 +129,10 @@ def prepare_agent(
     base_url: str,
     api_key: str,
     model: str,
-    provider_kwargs: dict = {},
-    modelsettings_kwargs: dict = {},
-    chatmodel_kwargs: dict = {},
-    **agent_kwargs: dict,
+    provider_kwargs: dict = None,
+    modelsettings_kwargs: dict = None,
+    chatmodel_kwargs: dict = None,
+    **agent_kwargs,
 ) -> Agent:
     """
     Prepare a Pydantic AI Agent with OpenAI provider and model.
@@ -148,11 +148,19 @@ def prepare_agent(
     Returns:
         Agent: Configured Pydantic AI Agent instance
     """
+    # Initialize mutable defaults to avoid shared state issues
+    if provider_kwargs is None:
+        provider_kwargs = {}
+    if modelsettings_kwargs is None:
+        modelsettings_kwargs = {}
+    if chatmodel_kwargs is None:
+        chatmodel_kwargs = {}
+
     # Create OpenAI provider with custom configuration
     openai_provider = OpenAIProvider(
         base_url=base_url, api_key=api_key, **provider_kwargs
     )
-
+    
     # Set default max_tokens to avoid wasting tokens if model hallucination occurs
     if "max_tokens" not in modelsettings_kwargs:
         modelsettings_kwargs["max_tokens"] = 10000

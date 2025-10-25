@@ -41,6 +41,7 @@ logger = get_logger(__name__)
 def explain_lyrics_content(lrc_content: str,
                            paths: dict,
                            target_language: str,
+                           song_story: dict = None,
                            recompute: bool = False) -> bool:
     """
     Extract lyrics from LRC content and explain them using an LLM.
@@ -79,6 +80,12 @@ def explain_lyrics_content(lrc_content: str,
     if not system_prompt:
         logger.exception(f"Failed to load prompt template: {prompt_file_name}")
         return False
+    
+    user_prompt = f"Lyrics:\n{lyrics_content}\n\n"
+
+    if song_story:
+        user_prompt += f"Creation Story:\n{song_story['creation_story']}\n\n"
+        user_prompt += f"Background Story:\n{song_story['background_story']}\n\n"
 
     try:
         # Get configuration for pydantic_ai
@@ -94,7 +101,7 @@ def explain_lyrics_content(lrc_content: str,
         logger.info("Starting lyrics explanation...")
 
         # Use the agent to perform explanation
-        result = agent.run_sync(lyrics_content)
+        result = agent.run_sync(user_prompt)
 
         if result and result.output:
             with open(output_path, "w", encoding="utf-8") as f:

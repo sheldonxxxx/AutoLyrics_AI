@@ -28,31 +28,31 @@ Your task is to analyze and explain song lyrics in {target_language}, providing 
 
 ### Input
 
-春が來た
-花が咲いてる
-風が優しく吹いてる
+Spring has come
+Flowers are blooming
+The wind is blowing gently
 
 ### Output
 
-# 歌詞解析
+# Lyrics Analysis
 
-## 核心主題與訊息
-[分析內容...]
+## Core Theme and Message
+[Analysis content...]
 
-## 敘事結構與視角
-[分析內容...]
+## Narrative Structure and Perspective
+[Analysis content...]
 
-## 逐句文學解析
+## Line-by-Line Literary Analysis
 
-### 第一段
-> **原文**：[原文歌詞]  
-> **翻譯**：[中文翻譯]
+### First Verse
+> **Original**: [Original lyrics]
+> **Translation**: [English translation]
 
-**解讀**：
-- **字面意思**：[...]
-- **隱含意義**：[...]
-- **原文特色**：[雙關/諧音/語法特點]
-- **文化脈絡**：[...]
+**Interpretation**:
+- **Literal Meaning**: [...]
+- **Implied Meaning**: [...]
+- **Original Features**: [Puns/Rhymes/Grammar features]
+- **Cultural Context**: [...]
 
-## 情感層次與氛圍
-[分析內容...]
+## Emotional Layers and Atmosphere
+[Analysis content...]

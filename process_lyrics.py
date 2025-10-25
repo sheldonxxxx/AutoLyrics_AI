@@ -140,7 +140,7 @@ def process_second_phase(
     if not verify_and_correct_timestamps_step(paths, results, resume):
         results.finalize()
         return False, results
-    
+
     # Step 6: Search for song story
     if not search_for_song_story_step(paths, results, resume):
         results.finalize()
@@ -159,6 +159,7 @@ def process_second_phase(
     results.finalize()
     logger.info(f"Second phase completed for {input_file}")
     return True, results
+
 
 def extract_metadata_step(input_file: Path, results: ProcessingResults) -> bool:
     """Step 1: Extract metadata from audio file."""
@@ -256,7 +257,7 @@ def identify_and_search_lyrics_step(
         if not has_metadata:
             results.metadata_title = result["song_title"]
             results.metadata_artist = result["artist_name"]
-        
+
         results.song_language = result["native_language"]
 
         if result.get("lyrics_content"):
@@ -312,12 +313,31 @@ def verify_and_correct_timestamps_step(
     # Read the ASR transcript content
     asr_transcript = read_file(paths["transcript_txt"])
 
+    output_lrc_path = paths["corrected_lrc"]
+
     # Verify and correct timestamps
     correct_lrc_success = verify_and_correct_timestamps(
         lrc_content, asr_transcript, paths, recompute=not resume
     )
 
     if correct_lrc_success:
+        # Add metadata tags at the beginning of the LRC content
+        metadata_tags = []
+        if results.metadata_title:
+            metadata_tags.append(f"[ti:{results.metadata_title}]")
+        if results.metadata_artist:
+            metadata_tags.append(f"[ar:{results.metadata_artist}]")
+        if results.metadata_album:
+            metadata_tags.append(f"[al:{results.metadata_album}]")
+
+        # Combine metadata tags with translated LRC content
+        if metadata_tags:
+            translated_lrc_content = read_file(output_lrc_path)
+            final_lrc_content = (
+                "\n".join(metadata_tags) + "\n\n" + translated_lrc_content
+            )
+            write_file(output_lrc_path, final_lrc_content)
+
         results.timestamp_verification_success = True
         return True
     else:
@@ -325,7 +345,8 @@ def verify_and_correct_timestamps_step(
         results.error_message = "Timestamp verification returned no corrected content"
         logger.exception("Failed to verify and correct LRC timestamps")
         return False
-    
+
+
 def search_for_song_story_step(
     paths: dict,
     results: ProcessingResults,
@@ -333,12 +354,14 @@ def search_for_song_story_step(
 ) -> bool:
     """Step 6: Search for song story using web search."""
     logger.info("Step 6: Searching for song story using web search...")
-    
 
-    song_story_success = search_song_story(results.metadata_title, 
-                                           results.metadata_artist, 
-                                           results.song_language,
-                                           paths, recompute=not resume)
+    song_story_success = search_song_story(
+        results.metadata_title,
+        results.metadata_artist,
+        results.song_language,
+        paths,
+        recompute=not resume,
+    )
 
     if song_story_success:
         results.song_story_search_success = True
@@ -348,6 +371,7 @@ def search_for_song_story_step(
         results.error_message = "Song story search failed"
         logger.error("Failed to search for song story")
         return False
+
 
 def explain_lyrics_step(
     paths: dict,
@@ -359,9 +383,15 @@ def explain_lyrics_step(
 
     logger.info("Step 6: Explaining lyrics in target language...")
 
+    song_story = json.load(open(paths["song_story"], "r", encoding="utf-8"))
+
     # Explain the lyrics content
     explanation_content = explain_lyrics_content(
-        read_file(paths["lrc"]), paths, target_language, recompute=not resume
+        read_file(paths["lrc"]),
+        paths,
+        target_language,
+        song_story=song_story,
+        recompute=not resume,
     )
 
     if explanation_content:
@@ -373,6 +403,7 @@ def explain_lyrics_step(
         logger.error("Failed to explain lyrics")
         return False
 
+
 def translate_lrc_step(
     paths: dict,
     target_language: str,
@@ -380,35 +411,21 @@ def translate_lrc_step(
     resume: bool,
 ) -> bool:
     """Step 8: Add translation to Traditional Chinese."""
-    translated_lrc_path = paths["translated_lrc"]
-
     logger.info("Step 7: Adding translation to Lyrics...")
 
-    lrc_content = read_file(paths["lrc"])
+    lrc_content = read_file(paths["corrected_lrc"])
+
+    song_explanation = read_file(paths["explanation_txt"])
 
     translate_success = translate_lrc_content(
-        lrc_content, paths, target_language, recompute=not resume
+        lrc_content,
+        paths,
+        target_language,
+        song_explanation=song_explanation,
+        recompute=not resume,
     )
 
     if translate_success:
-
-        # Add metadata tags at the beginning of the final LRC content
-        metadata_tags = []
-        if results.metadata_title:
-            metadata_tags.append(f"[ti:{results.metadata_title}]")
-        if results.metadata_artist:
-            metadata_tags.append(f"[ar:{results.metadata_artist}]")
-        if results.metadata_album:
-            metadata_tags.append(f"[al:{results.metadata_album}]")
-
-        # Combine metadata tags with translated LRC content
-        if metadata_tags:
-            translated_lrc_content = read_file(translated_lrc_path)
-            final_lrc_content = (
-                "\n".join(metadata_tags) + "\n\n" + translated_lrc_content
-            )
-            write_file(translated_lrc_path, final_lrc_content)
-
         results.translation_success = True
         return True
     else:
@@ -416,6 +433,7 @@ def translate_lrc_step(
         results.error_message = "Translation failed"
         logger.error("Translation failed")
         return False
+
 
 def setup_arguments() -> "argparse.Namespace":
     """Set up and parse command-line arguments."""
@@ -554,8 +572,15 @@ def _submit_second_phase_tasks(
     second_phase_futures = []
     skipped_results = []
 
-    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(first_phase_results))) as executor:
-        for audio_file, first_phase_success, first_phase_results_obj, paths in first_phase_results:
+    with ThreadPoolExecutor(
+        max_workers=min(MAX_WORKERS, len(first_phase_results))
+    ) as executor:
+        for (
+            audio_file,
+            first_phase_success,
+            first_phase_results_obj,
+            paths,
+        ) in first_phase_results:
             if first_phase_success:
                 future = executor.submit(
                     process_second_phase,
@@ -600,20 +625,34 @@ def _process_future_result(
                 logger.info(f"Phase 2 completed successfully for {audio_file}")
         else:
             _log_or_set_postfix(
-                progress_bar, use_progress_bar, f"Failed: {audio_file.name}", f"Phase 2 failed for {audio_file}: {results.error_message}", is_exception=False
+                progress_bar,
+                use_progress_bar,
+                f"Failed: {audio_file.name}",
+                f"Phase 2 failed for {audio_file}: {results.error_message}",
+                is_exception=False,
             )
         return results
 
     except Exception as e:
         _log_or_set_postfix(
-            progress_bar, use_progress_bar, f"Exception: {audio_file.name}", f"Exception in Phase 2 for {audio_file}: {e}", is_exception=True
+            progress_bar,
+            use_progress_bar,
+            f"Exception: {audio_file.name}",
+            f"Exception in Phase 2 for {audio_file}: {e}",
+            is_exception=True,
         )
         # Fallback to first phase results on exception
         results_obj = phase1_results_dict.get(audio_file)
         return results_obj if results_obj else ProcessingResults.create(audio_file, 0.0)
 
 
-def _log_or_set_postfix(progress_bar: Optional[tqdm], use_progress_bar: bool, postfix: str, log_message: str, is_exception: bool = False):
+def _log_or_set_postfix(
+    progress_bar: Optional[tqdm],
+    use_progress_bar: bool,
+    postfix: str,
+    log_message: str,
+    is_exception: bool = False,
+):
     """Log message or set progress bar postfix based on configuration."""
     if use_progress_bar and progress_bar:
         progress_bar.set_postfix_str(postfix)
@@ -631,10 +670,14 @@ def process_phase2(
     """Process Phase 2: LLM operations for all files using thread pool."""
     logger.info("Starting Phase 2: LLM operations for all files using thread pool...")
     all_results = []
-    phase1_results_dict = {audio_file: results_obj for audio_file, _, results_obj, _ in first_phase_results}
+    phase1_results_dict = {
+        audio_file: results_obj for audio_file, _, results_obj, _ in first_phase_results
+    }
 
     # Submit tasks and get futures and skipped results
-    second_phase_futures, skipped_results = _submit_second_phase_tasks(first_phase_results, args)
+    second_phase_futures, skipped_results = _submit_second_phase_tasks(
+        first_phase_results, args
+    )
     all_results.extend(skipped_results)
 
     # Set up progress bar
@@ -643,7 +686,13 @@ def process_phase2(
 
     # Collect results as they complete
     for audio_file, future in second_phase_futures:
-        result = _process_future_result(audio_file, future, phase1_results_dict, progress_bar, log_level >= logging.WARNING)
+        result = _process_future_result(
+            audio_file,
+            future,
+            phase1_results_dict,
+            progress_bar,
+            log_level >= logging.WARNING,
+        )
         all_results.append(result)
         if progress_bar:
             progress_bar.update(1)
@@ -655,7 +704,9 @@ def process_phase2(
     return all_results
 
 
-def collect_and_write_results(all_results: List[ProcessingResults], args: "argparse.Namespace") -> int:
+def collect_and_write_results(
+    all_results: List[ProcessingResults], args: "argparse.Namespace"
+) -> int:
     """Collect results, write to CSV, and calculate success count."""
     # Calculate success count for return code
     success_count = len([r for r in all_results if r.overall_success])
