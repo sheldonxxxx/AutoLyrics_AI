@@ -23,7 +23,7 @@ import os
 import logging
 from pathlib import Path
 from audio_separator.separator import Separator
-from logging_config import setup_logging, get_logger
+from utils import setup_logging, get_logger
 
 logger = get_logger(__name__)
 

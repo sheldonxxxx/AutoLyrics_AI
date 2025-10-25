@@ -19,16 +19,17 @@ Pipeline Stage: 5.5/6 (Timestamp Verification and Correction)
 
 import logging
 from pathlib import Path
-from logging_config import setup_logging, get_logger
 from utils import (
+    setup_logging,
+    get_logger,
     load_prompt_template,
     get_default_llm_config,
     convert_transcript_to_lrc,
     get_base_argparser,
     read_file,
     validate_lrc_content,
+    prepare_agent,
 )
-from agent_utils import prepare_agent
 
 logger = get_logger(__name__)
 

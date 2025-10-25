@@ -19,16 +19,17 @@ Pipeline Stage: 5/6 (LRC Generation)
 
 import logging
 from pathlib import Path
-from logging_config import setup_logging, get_logger
 from utils import (
+    setup_logging,
+    get_logger,
     read_file,
     get_base_argparser,
     load_prompt_template,
     convert_transcript_to_lrc,
     get_default_llm_config,
     validate_lrc_content,
+    prepare_agent,
 )
-from agent_utils import prepare_agent
 
 logger = get_logger(__name__)
 

@@ -24,7 +24,7 @@ Pipeline Stage: 3/6 (ASR Transcription)
 import os
 import logging
 from pathlib import Path
-from logging_config import setup_logging, get_logger
+from utils import setup_logging, get_logger
 from ffmpeg_normalize import FFmpegNormalize
 import stable_whisper
 from stable_whisper.audio import load_audio

@@ -54,7 +54,7 @@ Key Features:
 
 Dependencies:
 - mutagen>=1.47.0
-- logging_config (pipeline logging)
+- utils/logging_config (pipeline logging)
 
 Pipeline Stage: 1/6 (Metadata Extraction)
 """

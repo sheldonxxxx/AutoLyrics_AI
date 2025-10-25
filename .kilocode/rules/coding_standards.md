@@ -31,7 +31,7 @@ from typing import List
 from mutagen import File
 from openai import OpenAI
 
-from logging_config import get_logger
+from utils import get_logger
 ```
 
 ## Naming Conventions

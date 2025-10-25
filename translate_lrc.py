@@ -24,16 +24,17 @@ Pipeline Stage: 6/6 (Translation)
 import logging
 from pathlib import Path
 
-from logging_config import setup_logging, get_logger
 from utils import (
+    setup_logging,
+    get_logger,
     read_file,
     get_base_argparser,
     load_prompt_template,
     validate_lrc_content,
     get_prompt_file_for_language,
     get_translation_config,
+    prepare_agent,
 )
-from agent_utils import prepare_agent
 
 logger = get_logger(__name__)
 

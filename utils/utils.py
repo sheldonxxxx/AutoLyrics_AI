@@ -16,7 +16,7 @@ Core Functionality Areas:
 Dependencies:
 - pathlib (modern path handling)
 - typing (type hints)
-- logging_config (pipeline logging)
+- utils/logging_config (pipeline logging)
 - csv (CSV file generation)
 
 Used By: All pipeline modules for shared functionality
@@ -31,7 +31,7 @@ from datetime import datetime
 import time
 from pydantic import BaseModel, Field
 
-from logging_config import get_logger
+from .logging_config import get_logger
 
 logger = get_logger(__name__)
 

@@ -79,7 +79,7 @@ output/ (final files)
 - Support for custom base URLs for OpenAI-compatible services
 - Logging configuration through centralized module
 
-#### Logging Architecture (`logging_config.py`)
+#### Logging Architecture (`utils/logging_config.py`)
 - Centralized logging configuration across all modules
 - Consistent format and level management
 - Support for both console and file logging

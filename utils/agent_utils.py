@@ -9,7 +9,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.models.instrumented import InstrumentationSettings
 
-from logging_config import get_logger
+from .logging_config import get_logger
 
 logger = get_logger(__name__)
 

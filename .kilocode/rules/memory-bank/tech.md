@@ -27,7 +27,7 @@ Modern Python version providing latest language features and performance improve
 
 ### Logging Framework
 - **logging module**: Built-in Python logging with centralized configuration
-- **logging_config.py**: Centralized logging setup across all modules
+- **utils/logging_config.py**: Centralized logging setup across all modules
 
 ### File Path Management
 - **pathlib**: Modern Python path handling with Path objects

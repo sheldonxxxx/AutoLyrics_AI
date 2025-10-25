@@ -26,8 +26,7 @@ from mutagen.id3 import ID3NoHeaderError
 from mutagen.flac import FLACNoHeaderError, FLAC
 
 import logging
-from logging_config import setup_logging, get_logger
-from utils import get_base_argparser
+from utils import setup_logging, get_logger, get_base_argparser
 
 logger = get_logger(__name__)
 

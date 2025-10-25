@@ -33,7 +33,7 @@ import concurrent
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from dotenv import load_dotenv
-from logging_config import setup_logging, get_logger
+from utils import setup_logging, get_logger
 from extract_metadata import extract_metadata
 from transcribe_vocals_stable import transcribe_with_timestamps
 from generate_lrc import read_file, generate_lrc_lyrics
