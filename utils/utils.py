@@ -35,7 +35,7 @@ from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
-PROMPT_DIR = Path(__file__).parent / "prompt"
+PROMPT_DIR = Path(__file__).parent.parent / "prompt"
 
 
 class ProcessingResults(BaseModel):
@@ -101,7 +101,7 @@ class ProcessingResults(BaseModel):
     explanation_success: bool = Field(
         default=False, description="Whether explanation succeeded"
     )
-    
+
     song_story_search_success: bool = Field(
         default=False, description="Whether song story search succeeded"
     )
@@ -226,8 +226,10 @@ def get_output_paths(
         "normalized_vocals_wav": song_folder / f"{filename_stem}_vocal_normalized.wav",
         "transcript_txt": song_folder / f"{filename_stem}_transcript.txt",
         "transcript_word_txt": song_folder / f"{filename_stem}_transcript_word.txt",
-        "corrected_transcript_txt": song_folder / f"{filename_stem}_corrected_transcript.txt",
-        "song_identification": song_folder / f"{filename_stem}_song_identification.json",
+        "corrected_transcript_txt": song_folder
+        / f"{filename_stem}_corrected_transcript.txt",
+        "song_identification": song_folder
+        / f"{filename_stem}_song_identification.json",
         "lyrics_txt": song_folder / f"{filename_stem}_lyrics.txt",
         "lrc": song_folder / f"{filename_stem}.lrc",
         "explanation_txt": song_folder / f"{filename_stem}_explanation.md",
