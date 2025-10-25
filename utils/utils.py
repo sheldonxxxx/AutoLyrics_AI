@@ -35,6 +35,8 @@ from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
+PROMPT_DIR = Path(__file__).parent / "prompt"
+
 
 class ProcessingResults(BaseModel):
     """Manages processing results and metadata for a single file."""
@@ -266,9 +268,7 @@ def load_prompt_template(prompt_file: str, **kwargs) -> str | None:
     """
     try:
         # Load prompt template from file
-        prompt_file_path = os.path.join(
-            os.path.dirname(__file__), "prompt", prompt_file
-        )
+        prompt_file_path = PROMPT_DIR / prompt_file
         with open(prompt_file_path, "r", encoding="utf-8") as f:
             template = f.read()
         if kwargs:
