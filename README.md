@@ -1,5 +1,7 @@
 # Music Lyrics Processing Pipeline
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=sheldonxxxx_AutoLyrics_AI&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=sheldonxxxx_AutoLyrics_AI)
+
 🎵 **AI-Powered Lyrics Processing** → 🎤 **Vocal Separation** → 🔍 **Song Identification** → 📝 **Synchronized LRC**
 
 Python-based pipeline that processes music files to extract lyrics, separate vocals, and generate synchronized LRC format lyrics with translation capabilities. This mature system features a well-structured modular architecture supporting both individual components and full pipeline processing.
