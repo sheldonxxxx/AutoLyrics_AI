@@ -2,9 +2,20 @@
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=sheldonxxxx_AutoLyrics_AI&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=sheldonxxxx_AutoLyrics_AI)
 
-🎵 **AI-Powered Lyrics Processing** → 🎤 **Vocal Separation** → 🔍 **Song Identification** → 📝 **Synchronized LRC**
+🎵 **AI-Powered Lyrics Extraction** → 🔍 **Song Identification** → 🔍 **Song Background story search** → 📝 **Synchronized Bilingual LRC file**
 
-Python-based pipeline that processes music files to extract lyrics, separate vocals, and generate synchronized LRC format lyrics with translation capabilities. This mature system features a well-structured modular architecture supporting both individual components and full pipeline processing.
+Python-based pipeline that processes music files to extract lyrics, separate vocals, and generate synchronized LRC format lyrics with translation capabilities. This mature system features a well-structured modular architecture supporting both individual components and full pipeline processing, including comprehensive batch processing with two-phase execution for efficient resource management and seamless integration with specialized modules for each stage of the workflow.
+
+## Table of Contents
+
+- [Project Summary](#-project-summary)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Pipeline Architecture](#pipeline-architecture)
+- [Requirements](#requirements)
+- [Contributing](#contributing)
 
 ## 🚀 Project Summary
 
@@ -16,21 +27,15 @@ Python-based pipeline that processes music files to extract lyrics, separate voc
 
 - **Metadata Extraction**: Extract song title, artist, and other metadata from audio files
 - **Song Identification**: Identify songs from ASR transcripts using AI Agent and web search mcp server
-- **Vocal Separation**: Separate vocals from music using audio-separator
 - **Transcription**: Generate timestamped transcription of vocals using Whisper
 - **Lyrics Search**: Search for lyrics using AI Agent
 - **LRC Generation**: Combine verified lyrics and transcription to create synchronized LRC files
+- **Background Story Search**: Search for song stories and explanations
 - **Translation**: Translate LRC lyrics to desired language
-
-### Workflow Details
-
-1. **🎵 Input Processing**: Audio files (FLAC/MP3) are processed recursively from input directory
-2. **📋 Metadata Extraction**: Song title, artist, and other metadata extracted from audio tags
-3. **🎤 Separate Vocals & Transcribe**: Use UVR to isolate vocals, generate timestamped ASR transcription
-4. **🔍 Identify Song & Search Lyrics**: If no metadata, use LLM to identify song; search for lyrics using web-search-mcp
-5. **🎼 LRC Generation**: Creates synchronized LRC file combining lyrics + ASR timestamps
-6. **🌏 Translation**: Translates LRC to target language while preserving timestamps
-7. **🎯 Output**: Saves synchronized bilingual LRC files to output directory
+- **Resume Functionality**: Resume interrupted processing by skipping files that already have output files
+- **CSV Reporting**: Generate detailed CSV reports of processing results with timestamps
+- **Progress Tracking**: Real-time progress bars and logging for monitoring batch processing
+- **Parallel Processing**: Threading support for Phase 2 operations to process multiple files concurrently
 
 ## Installation
 
@@ -83,9 +88,9 @@ The `process_lyrics.py` script supports the following command line arguments:
 | `--resume` | - | Resume processing by skipping files that already have output files | `False` |
 | `--log-level` | - | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
 | `--logfire` | - | Enable Logfire integration for advanced logging | `False` |
-| `--csv-output` | `-c` | CSV file to save processing results | `results_YYYYMMDD_HHMMSS.csv` |
+| `--csv-output` | `-c` | CSV file to save processing results | `results_YYYYMMDDHHMMSS.csv` |
 | `--no-color` | - | Disable colored logging output | `False` |
-| `--target-language` | - | Target language for translation | `Traditional Chinese` |
+| `--language` | - | Target language for translation | From environment or English |
 
 #### Example Usage
 
@@ -97,7 +102,7 @@ uv run process_lyrics.py /path/to/music --output-dir /path/to/output --temp-dir 
 uv run process_lyrics.py input --resume --log-level DEBUG
 
 # Process with custom translation language and CSV output
-uv run process_lyrics.py input --target-language Japanese --csv-output results.csv
+uv run process_lyrics.py input --language Japanese --csv-output results.csv
 
 # Full featured processing with all options
 uv run process_lyrics.py input \
@@ -106,7 +111,7 @@ uv run process_lyrics.py input \
   --resume \
   --log-level INFO \
   --csv-output processing_results.csv \
-  --target-language "Traditional Chinese"
+  --language "Traditional Chinese"
 ```
 
 ## Configuration
@@ -171,6 +176,36 @@ Logfire provides enhanced logging capabilities including structured logging, per
 - Output files are saved in the `output/` directory
 - Models are stored in the `models/` directory
 
+## Pipeline Architecture
+
+The pipeline is divided into two distinct phases for efficient processing:
+
+### Phase 1: Metadata Extraction and Transcription
+- Extracts song metadata from audio files
+- Generates timestamped ASR transcription of vocals
+- Processes files sequentially for accuracy
+
+### Phase 2: LLM Operations
+- Identifies songs using LLM and web search if metadata is missing
+- Searches for lyrics on external sources
+- Generates synchronized LRC files by combining lyrics and timestamps
+- Verifies and corrects LRC timestamps for accuracy
+- Searches for song stories and explanations
+- Translates lyrics to the target language while preserving synchronization
+- Uses parallel threading for efficient processing of multiple files
+
+This two-phase approach allows for better resource management, with Phase 1 focusing on CPU-intensive audio processing and Phase 2 leveraging LLM capabilities in parallel.
+
+### Workflow Details
+
+1. **🎵 Input Processing**: Audio files (FLAC/MP3) are processed recursively from input directory
+2. **📋 Metadata Extraction**: Song title, artist, and other metadata extracted from audio tags
+3. **🎤 Transcribe**: Use UVR to isolate vocals, generate timestamped ASR transcription
+4. **🔍 Identify Song & Search Lyrics**: If no metadata, use LLM to identify song; search for lyrics using web-search-mcp
+5. **🎼 LRC Generation**: Creates synchronized LRC file combining lyrics + ASR timestamps
+6. **🌏 Translation**: Translates LRC to target language while preserving timestamps
+7. **🎯 Output**: Saves synchronized bilingual LRC files to output directory
+
 ## Requirements
 
 - Python 3.13+
@@ -191,7 +226,6 @@ This project has been tested and verified on:
 - Check the `tmp/` folder for intermediate files (transcripts, lyrics) to debug issues
 - Use `--log-level DEBUG` for detailed logging information
 - All processing steps are logged with timestamps for troubleshooting
-
 
 ## Contributing
 
