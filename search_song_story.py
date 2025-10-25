@@ -68,7 +68,7 @@ class SongStory(BaseModel):
     )
 
 
-def init_agent(system_prompt: str, max_search_results: int = 5):
+def init_agent(system_prompt: str, max_search_results: int = 15):
     """Initialize the song story searcher with LLM and remote MCP search tools.
 
     Args:
@@ -104,7 +104,7 @@ def search_song_story(
     native_language: str,
     paths: dict,
     recompute: bool = False,
-    max_search_results: int = 5,
+    max_search_results: int = 15,
 ) -> bool:
     """
     Search for song background story with caching support.

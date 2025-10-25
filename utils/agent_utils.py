@@ -72,7 +72,7 @@ def extract_web_content(text):
 class SearxngLimitingToolset(WrapperToolset):
     """Custom wrapper toolset to limit SearXNG search results."""
 
-    def __init__(self, wrapped, max_results: int = 5):
+    def __init__(self, wrapped, max_results: int = 15):
         """Initialize with configurable result limit.
 
         Args:

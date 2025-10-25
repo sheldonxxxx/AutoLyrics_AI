@@ -71,7 +71,7 @@ class SongIdentification(BaseModel):
     reasoning: str = Field(description="Explanation of how the identification was made")
 
 
-def init_agent(system_prompt: str, max_search_results: int = 5) -> Agent:
+def init_agent(system_prompt: str, max_search_results: int = 15) -> Agent:
     """Initialize the song identifier with LLM and remote MCP search tools.
 
     Args:
@@ -210,7 +210,7 @@ def identify_song_from_asr(
     paths: dict,
     metadata: Optional[dict] = None,
     recompute: bool = False,
-    max_search_results: int = 5,
+    max_search_results: int = 15,
 ) -> bool:
     """
     Identify song from ASR transcript with retry mechanism and feedback about previous wrong results.

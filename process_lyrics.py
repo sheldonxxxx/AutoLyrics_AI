@@ -55,8 +55,8 @@ from utils import (
 logger = get_logger(__name__)
 
 # Constants
-MAX_WORKERS = 10
-
+MAX_WORKERS = 1 
+# TODO: When worker is 5, getting httpx read error and searxng rate limit, need to find root cause
 
 def process_first_phase(
     input_file: Path,
